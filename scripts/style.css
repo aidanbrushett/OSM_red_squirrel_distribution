@@ -1,0 +1,70 @@
+/* ====================================================
+   Material Dark Theme – Custom CSS for Knitted HTML Output
+   Designed to match RStudio's Visual Editor with a dark Material aesthetic
+   ==================================================== */
+
+/* ----- Root Variables (Material Dark Palette) ----- */
+:root {
+  /* Typography */
+  --font-base: "Roboto", sans-serif;
+  --font-mono: "Source Code Pro", monospace;
+
+  /* Colors */
+  --bg-color: #263238;            /* Dark blue-gray */
+  --text-color: #ECEFF1;          /* Light gray text */
+  --heading-color: #FFFFFF;
+  --link-color: #40C4FF;
+  --code-bg: #37474F;             /* Darker gray-blue */
+  --code-border: #455A64;
+  
+  /* Syntax Highlighting */
+  --comment-color: #90A4AE;       /* Light gray-blue */
+  --keyword-color: #FF4081;       /* Material Pink */
+  --string-color:  #C3E88D;       /* Light green */
+  --number-color:  #FBC02D;       /* Material Yellow */
+  --function-color: #82AAFF;      /* Bright Blue */
+  --variable-color: #40C4FF;      /* Cyan */
+  --builtin-color: #7B1FA2;       /* Material Purple */
+  --literal-color: #F07178;       /* Redish Pink */
+}
+
+/* ----- Global Styles ----- */
+body {
+  font-family: var(--font-base);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+.container, .main-container, .content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1em;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-base);
+  color: var(--heading-color);
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 400;
+}
+
+h1 {
+  font-size: 2.5em;
+  border-bottom: 2px solid var(--link-color);
+  padding-bottom: 0.3em;
+}
+
+h2 {
+  font-size: 2em;
+  border-bottom: 1px solid var(--link-color);
+  padding-bottom: 0.2em;
+}
+
+h3 { font-size: 1.75em; }
+h4 { font-size: 1.5em; }
+h5 { font-size: 1.

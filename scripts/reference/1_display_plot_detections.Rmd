@@ -1,0 +1,134 @@
+---
+title: "Ch. 1. Basic summary figures for each array"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+# 0. Before you begin
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+***
+
+# 1. Setup
+
+```{r}
+rm(list=ls()) # start fresh :)
+
+library(tidyverse)
+library(ggplot2)
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+
+```
+
+# 2. Import data
+
+```{r}
+all_indet <- read_csv('./data/processed/all-arrays_ind_det.csv')
+
+all_pa <- read_csv('./data/processed/all-arrays_weekly_pa.csv')
+```
+
+
+```{r}
+monthly_indet <- all_indet %>%
+  
+  mutate(year = year(event_start),
+         month = month(event_start)) %>%
+  
+  drop_na() %>%
+  
+  group_by(species, month, year, array, site) %>%
+  
+  summarize(dets_per_site = n()) %>%
+  
+  ungroup() %>%
+  
+  group_by(species, month, year, array) %>%
+  
+  summarize(detections = sum(dets_per_site, na.rm = T),
+            total_sites = n_distinct(site)) %>%
+  
+#  mutate(detections_per_site = detections / total_sites) %>%
+  
+  mutate(yearmonth = as.Date(paste(year, month, "01", sep = "-")))
+
+
+```
+
+# 3. Monthly independent detections of hare, lynx, and coyote for Christina Lake. Detections are NOT currently adjusted for sampling effort. 
+
+```{r}
+fig_christina_hare <- monthly_indet %>% 
+  
+  filter(species %in% c('snowshoe hare', 'coyote', 'lynx'),
+         array == 'Christina') %>%
+  
+  ggplot(., aes(x = yearmonth, y = detections, fill = species)) +
+    geom_bar(stat = "identity", position = "dodge") +  # Dodge bars for species comparison
+    scale_fill_viridis_d() +  # Use Viridis color scal    geom_point() +
+    labs(title = "Avg. monthly detections per site for Christina Lake",
+         x = "Month",
+         y = "Total Detections",
+         color = "Year") +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +  # 6-month interval
+    scale_y_continuous(expand = c(0, 0)) +  # Remove whitespace at the bottom of the y-axis
+    theme_bw() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels
+
+ggsave("./figures/christinalake_monthlydetection_hare_lynx_coyote.png", fig_christina_hare, width = 8, height = 4)
+```
+
+# 4. Monthly independent detections of snowshoe hares for all arrays. Detections are NOT currently adjusted for sampling effort (i.e. number of sites or camera trap days). 
+
+Re-running this figure with a different species is very easy. I also exported one for coyote and lynx. 
+
+```{r}
+
+fig_monthly_hare <- monthly_indet %>%
+  
+  filter(species == 'snowshoe hare') %>%
+  
+  mutate(yearmonth = as.Date(paste(year, month, "01", sep = "-"))) %>%
+  
+  ggplot(., aes(x = yearmonth, y = detections)) + 
+    geom_bar(stat = 'identity', position = 'dodge') + 
+    facet_wrap(~array, scales = 'free_x') + 
+      scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +  # 6-month interval
+    scale_y_continuous(expand = c(0, 0)) +  # Remove whitespace at the bottom of the y-axis
+    ylim(0, 50) + 
+    theme_bw() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels
+
+      
+ggsave("./figures/allarrays_monthlydetection_hare.png", fig_monthly_hare, width = 12, height = 14)
+
+```
+
+
+
+
+
+
+

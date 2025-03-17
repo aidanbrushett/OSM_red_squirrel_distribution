@@ -1,0 +1,478 @@
+---
+title: "OSM arrays: Import camera data, covariates, and calculate independent detections"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+***
+
+
+# 0. Before you begin
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+
+***
+
+
+# 1. Set up workspace
+
+## 1.1. Install packages
+
+If you don't already have the following packages installed, use the code below to install them.
+```{r install, eval=FALSE}
+list.of.packages <- c("tidyverse", "sf", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+rm(new.packages, list.of.packages)
+```
+
+## 1.2. Load libraries
+
+And a couple custom functions that can help with masking issues from package loading:
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list=ls()) # clear environment
+
+library(tidyverse) # data tidying, visualization, and much more; this will load all tidyverse packages, can see complete list using tidyverse_packages()
+library(ggplot2) # pretty plots
+library(sf) # for writing and copying files and directories
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+
+***
+
+
+# 2. Import OSM image data
+
+This was prepared separately in the OSM repositories by Marissa Dyck and Aidan Brushett. Because of the high quality of the data, we can impose a couple extra restraints compared to the Christina and Whitefish data (e.g., account for snow cover and account for empty images). See https://github.com/ACMElabUvic/OSM_2023-2024 for details. 
+
+```{r}
+osm_image <- list.files(path="./data/raw/", 
+                               pattern="OSM_timelapse", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(datetime = col_character(), # we will fix this later
+                                    site = col_character(),
+                                    total = col_integer(),
+                                    group_count = col_integer(), 
+                                    comments = col_character(),
+                                    species = col_factor(),
+                                    otherspecify = col_character(),
+                                    snow = col_factor(),
+                                    empty = col_logical())
+          ) %>%
+
+            set_names(tolower(names(.))) %>%
+            
+            select(-array, -camera) %>%
+            
+            # Remove "Z" and "T" to brute force the timestamps
+            mutate(datetime = datetime %>% str_replace_all("Z", "") %>% str_replace_all("T", " "),
+                   datetime = as_datetime(datetime),
+                   datasource = paste0(.x),
+                   year = year(datetime), 
+                   month = month(datetime),
+                   day = day(datetime)) %>%
+            
+            mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .) %>% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %>%
+            
+            # Create some extra columns
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array', 'camera'),
+                                 cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              ) %>%
+            
+            select(file, relativepath, array, camera, site, snow, datetime, 
+                   year, month, day, classifier, species, total, group_count, comments, 
+                   empty, datasource, cameramalfunction) 
+          )
+```
+
+Inspect the OSM data for any NAs, irregular values, or bad classes. 
+
+```{r}
+str(osm_image)
+summary(osm_image)
+
+# where are the NAs coming from?
+osm_image %>% filter(is.na(datetime))
+
+levels(osm_image$site) # there are 432 levels which makes sense
+
+osm_image %>% filter(is.na(site)) # one NA for site, not worried since there's no animal tagged
+
+# where are the NAs coming from?
+# Site three parses date as NA in the Oct 2017 to Jan 2019 folder but it's extremely low data (1month only) so will discard that site later.  
+
+# There aren't very many NA values for total and they seem relatively minor.
+osm_image %>%
+  filter(!is.na(species),
+         species != "Staff",
+         empty==FALSE) %>%
+  filter(is.na(total))
+```
+
+Everything seems reasonable. Let's remove the unconcerning NA rows and create a new dataframe that contains only the confirmed detection data and timestamps, with some informative columns. For now, empty==TRUE cases are still included. 
+
+```{r}
+osm_image <- osm_image %>%
+  
+  filter(!is.na(camera), # remove the single missing row with no camera name (not useful)
+         !is.na(datetime)) %>% # remove the missing datetime stamps (92 images from one staff image event, not helpful either)
+
+  select(array, camera, site, datetime, species, total, empty, cameramalfunction)
+
+#write_csv(osm_image, "./data/raw/osm_detections_raw_2021-2023.csv")
+```
+
+Independent detections:
+
+We will use a 30-minute independent detection threshold. 
+
+```{r}
+mins <- 30 #30 minute threshold for independent detections
+```
+
+However, a 10-minute threshold correlated best with snowshoe hare density in this paper, so it could be worth considering at a later date:
+
+Villette, P., Krebs, C.J. & Jung, T.S. Evaluating camera traps as an alternative to live trapping for estimating the density of snowshoe hares (Lepus americanus) and red squirrels (Tamiasciurus hudsonicus). Eur J Wildl Res 63, 7 (2017). https://doi.org/10.1007/s10344-016-1064-3
+
+```{r}
+osm_indet <- osm_image %>%
+  
+  drop_na(species) %>%
+  
+  filter(empty==FALSE,
+         !is.na(species)) %>% # additional to remove empty images from a 'group'
+  
+  arrange(site, species, datetime) %>%
+  
+  group_by(species, site) %>%
+  
+  # independent detections based on 30min threshold
+  mutate(
+    #DateTime2 = as.POSIXct(datetime), # convert to seconds. Might be redundant code, this function was embedded from previous code written by Aidan.
+    timediff = c(difftime(datetime, lag(datetime), 
+                          units = "mins")), # time difference from prev photo
+    detection_id = cumsum(if_else(is.na(timediff) | timediff > mins,  # Create episode IDs to distinguish detections 
+                               1, 
+                               0))) %>%
+  
+  ungroup() %>%
+  
+  group_by(array, camera, site, species, detection_id) %>%
+  
+  summarize(event_start = min(datetime), event_end = max(datetime)) %>%
+
+  ungroup() %>%
+  
+  select(-detection_id) %>%
+  
+  # We will pull out the first and last timestamp of an event. This is a very coarse measure of event duration. 
+  mutate(year = year(event_start),
+         month = month(event_start))
+
+write_csv(osm_indet,
+          './data/processed/OSM_independent_detections_2021-2023.csv')
+```
+
+# 3. Import OSM deployment data
+
+This deployment data is confirmed as correct. It does NOT account for snow cover, which we will do manually below using the image data. 
+
+```{r}
+osm_deploy <- list.files(path="./data/raw/", 
+                               pattern="OSM_deployment_2", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(array = col_factor(),
+                                    site = col_factor(),
+                                    start_date = col_datetime(format = "%Y-%m-%d"),
+                                    end_date = col_datetime(format = "%Y-%m-%d"), 
+                                    camera_failure_details = col_character()
+                                    )
+          ) %>%
+        
+            mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .) %>% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %>%
+            
+            select(-array) %>%
+            
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array', 'camera'),
+                                 cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              )
+      )
+```
+
+Plot it out. It all looks good to me!
+
+```{r}
+# Inspect the deployment data to make sure it all looks reasonable
+ggplot(osm_deploy, aes(color = array))+
+  
+  geom_segment(aes(x = start_date, 
+                   xend = end_date,
+                   y = site, 
+                   yend = site)) +
+  
+  theme(axis.text = element_text(size = 6))       
+```
+
+List of dates:
+
+```{r}
+osm_operating <- osm_deploy %>% 
+  
+  drop_na(start_date, end_date) %>%
+  
+  rowwise() %>%
+  
+  # create a list sequence of dates for each site from the first to the last day of operability
+  mutate(date = list(seq(from = date(start_date), to = date(end_date), by="day"))) %>% 
+    
+  unnest(date) %>%
+  
+  select(array, camera, site, date)
+```
+
+We also need to modify the OSM operating dataframe to account for days where the camera was fully covered by snow or otherwise obstructed (cases where `cameramalfunction == *'Fully obscured'*`). Let's identify those from the raw timelapse data and remove them from `osm_operating`.
+
+```{r}
+osm_obscured <- osm_image %>%
+  
+  filter(cameramalfunction == 'Fully obscured') %>%
+  
+  mutate(date = as.Date(datetime)) %>%
+  
+  select(array, camera, site, date) %>% 
+  
+  distinct()
+```
+
+Let's remove those dates:
+
+```{r}
+osm_operating <- osm_operating %>%
+  
+  anti_join(osm_obscured)
+                                 
+# Save the operating days file
+#write_csv(osm_operating, "./data/raw/OSM_operating_days.csv")
+```
+
+Write the file:
+
+```{r}
+write_csv(osm_operating, "./data/processed/OSM_operating_2021-2023.csv")
+rm(osm_deploy)
+```
+
+# 4. Import OSM covariate data
+
+This has already been cleaned, grouped, and inspected in the OSM_20XX-20XX repositories on the ACME GitHub, see those for details. The protocol established here for grouping and removing HFI and Landcover variables will be followed by the other arrays in this project for consistency.
+
+```{r}
+osm_covs <- read_csv("./data/raw/OSM_covariates_grouped_2021_2022_2023.csv",
+                     col_types = cols(site = col_factor(),
+                                      array = col_factor(),
+                                      .default = col_number())
+                     ) %>% 
+  
+              mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .) %>% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %>%
+            
+            select(-array) %>%
+            
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array', 'camera'),
+                                 cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              )
+```
+
+We may want each buffer to have it's own column for each variable (e.g. create a wide format of this data) for modeling purposes, we can do that with the `pivot_wider()` function. 
+
+```{r wide format covariates}
+# we also may want to pivot wider so that each column is for a different buffer for modeling purposes, we can use pivot wider to do this
+
+osm_covs_wide <- osm_covs %>% 
+  
+  # pivot wider was not collapsing the data very well with the camera and array variables present. 
+  # let's remove them first. 
+  select(site, buff_dist, harvest:osm_industrial) %>% 
+
+  # wide data
+  pivot_wider(names_from = buff_dist,
+              values_from = c(harvest:osm_industrial)) %>%
+  
+  # let's re-add the array and camera columns that we previously lost.
+  # this code is redundant but seems to help `pivot_wider` do its job. 
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array',
+                                 'camera'),
+                       cols_remove = FALSE) %>%
+  
+  # specify format of new columns
+  mutate(array = as.factor(array),
+         camera = as.factor(camera))
+```
+
+# 5. Import OSM coordinates 
+
+We will get these from the site deployment datasheets, originally sourced from the NetDrive. 
+
+```{r}
+osm_coords <- list.files(path="./data/raw/", 
+                               pattern="OSM_Deployment_Site_", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(Array = col_factor(),
+                                    Site = col_factor(),
+                                    Lat = col_number(),
+                                    Long = col_number())
+                   ) %>%
+            
+            set_names(names(.) %>% tolower()) %>%
+            
+            select(-array) %>%
+            
+            mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .) %>% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %>%
+            
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array', 'camera'),
+                                 cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              ) %>%
+            
+            select(array, camera, site, lat, long)
+      )
+```      
+                     
+Get UTM coordinates (NAD83 UTM 12N):
+                     
+```{r}
+# assuming lat/long was extracted in NAD83
+osm_coords <- st_as_sf(osm_coords, coords = c("long", "lat"), crs = 4269) %>% 
+  
+  mutate(long = st_coordinates(.)[,1],
+         lat = st_coordinates(.)[,2]) %>%
+  
+  st_transform(osm_coords, crs = 26912) %>%
+  
+  mutate(easting_12n = st_coordinates(.)[,1],
+         northing_12n = st_coordinates(.)[,2]) %>%
+  
+  st_drop_geometry(.)
+
+st_crs(osm_coords)
+```
+                     
+Join the coordinates to the covariate data.
+
+```{r}
+osm_covs_wide <- osm_coords %>%
+  
+  left_join(osm_covs_wide, by = c('array', 'camera', 'site'))
+```
+
+Final check:
+
+```{r}
+# also, just to confirm: there is covariate data for all sites in the detection data. 
+setdiff(unique(osm_indet$site),
+        unique(osm_covs_wide$site))
+
+# covs were extracted for two extras site that we don't rly care about. LU3_106 has no data, and neither does LU14_57.
+# I'm not sure why it's in the coordinate file for LU03. 
+setdiff(unique(osm_covs_wide$site),
+        unique(osm_indet$site))
+```
+We have covariates for all our detection data which is what matters. The extra covariates do not matter and will be filtered out later when we join our data. If those sites' data ever turn up on an old SD card or something, this means we'll be prepared with the cov data.
+
+
+Save the file:
+
+```{r}
+write_csv(osm_covs_wide, "./data/processed/OSM_covariates_2021-2023.csv")
+```
+                   
+                     
+                     
+                     
+                     
+                     
+                     
+                     
+                     
+                     

@@ -1,0 +1,858 @@
+---
+title: "Ch. 1. Import camera data and calculate independent detections"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+***
+
+
+# 0. Before you begin
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+
+***
+
+
+# 1. Set up workspace
+
+## 1.1. Install packages
+
+If you don't already have the following packages installed, use the code below to install them.
+```{r install, eval=FALSE}
+list.of.packages <- c("tidyverse", "sf", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+rm(new.packages, list.of.packages)
+```
+
+## 1.2. Load libraries
+
+And a couple custom functions that can help with masking issues from package loading:
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list=ls()) # clear environment
+
+library(tidyverse) # data tidying, visualization, and much more; this will load all tidyverse packages, can see complete list using tidyverse_packages()
+library(ggplot2) # pretty plots
+library(sf) # for writing and copying files and directories
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+
+***
+
+
+# 2. Import OSM camera data from all years
+
+## 2.1. Import the cleaned OSM deployment data:
+
+```{r}
+osm_deploy <- list.files(path="./data/raw/", 
+                               pattern="OSM_deployment_2", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(array = col_factor(),
+                                    site = col_factor(),
+                                    start_date = col_datetime(format = "%Y-%m-%d"),
+                                    end_date = col_datetime(format = "%Y-%m-%d"), 
+                                    camera_failure_details = col_character()
+                                    )
+          ) %>%
+        
+            mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                 gsub(" ", "", .) %>% # Then, remove any spaces
+                as.factor(.) # Then, convert back to factor
+               )
+        )
+
+# Inspect the deployment data to make sure it all looks reasonable
+ggplot(osm_deploy, aes(color = array))+
+  
+  geom_segment(aes(x = start_date, 
+                   xend = end_date,
+                   y = site, 
+                   yend = site)) +
+  
+  theme(axis.text = element_text(size = 6))       
+```
+
+# 2.2. Generate a list of dates the OSM cameras were working
+
+```{r}
+osm_operating <- osm_deploy %>% 
+  
+  drop_na(start_date, end_date) %>%
+  
+  rowwise() %>%
+  
+  # create a list sequence of dates for each site from the first to the last day of operability
+  mutate(date = list(seq(from = date(start_date), to = date(end_date), by="day"))) %>% 
+    
+  unnest(date) %>%
+  
+  select(array, site, date)
+```
+
+```{r}
+rm(osm_deploy)
+```
+
+## 2.3. Import OSM raw timelapse data
+
+```{r}
+osm_data <- list.files(path="./data/raw/", 
+                               pattern="OSM_timelapse", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(datetime = col_character(),
+                                    site = col_character(),
+                                    total = col_integer(),
+                                    group_count = col_integer(), 
+                                    comments = col_character(),
+                                    species = col_factor(),
+                                    otherspecify = col_character(),
+                                    snow = col_factor(),
+                                    empty = col_logical())
+          ) %>%
+
+            set_names(tolower(names(.))) %>%
+            
+            # Remove "Z" and "T" to brute force the timestamps
+            mutate(datetime = datetime %>% str_replace_all("Z", "") %>% str_replace_all("T", " "),
+                   datetime = as_datetime(datetime),
+                   datasource = paste0(.x),
+                   year = year(datetime), 
+                   month = month(datetime),
+                   day = day(datetime),
+                   site = as.factor(site %>% gsub("_0+", "_", .) ) # remove leading zeros after the underscore
+            ) %>%
+            
+            select(-array, -camera) %>% # I don't like these for past years. Fixing here. 
+            
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array',
+                                           'camera'),
+                                 cols_remove = FALSE) %>%
+            
+            mutate(array = as.factor(array)) %>%
+            
+              select(file, relativepath, array, camera, site, snow, datetime, 
+                     year, month, day, classifier, species, total, group_count, comments, 
+                     empty, datasource, cameramalfunction)
+    )
+```
+
+Inspect the OSM data for any NAs, irregular values, or bad classes. 
+
+```{r}
+str(osm_data)
+summary(osm_data)
+
+# where are the NAs coming from?
+osm_data %>% filter(is.na(datetime))
+
+levels(osm_data$site) # there are 432 levels which makes sense
+
+osm_data %>% filter(is.na(site)) # one NA for site, not worried since there's no animal tagged
+
+# where are the NAs coming from?
+# Site three parses date as NA in the Oct 2017 to Jan 2019 folder but it's extremely low data (1month only) so will discard that site later.  
+
+# There aren't very many NA values for total and they seem relatively minor.
+osm_data %>%
+  filter(!is.na(species),
+         species != "Staff",
+         empty==FALSE) %>%
+  filter(is.na(total))
+```
+
+Everything seems reasonable. Let's remove the unconcerning NA rows and create a final file that contains only the positive detection data and timestamps.
+
+```{r}
+osm_detections <- osm_data %>%
+  
+  filter(!is.na(camera), # remove the single missing row with no camera name (not useful)
+         !is.na(datetime),
+         empty==FALSE) %>% # remove the missing datetime stamps (92 images from one staff image event, not helpful either)
+
+  select(array, site, datetime, species, total) %>%
+  
+  filter(!is.na(species))
+
+#write_csv(osm_detections, "./data/raw/OSM_all_detections.csv")
+```
+
+## 2.4. Update operability with 'camera obscured' data
+
+We also need to modify the OSM operating dataframe to account for days where the camera was fully covered by snow or otherwise obstructed (cases where `cameramalfunction == *'Fully obscured'*`). Let's identify those from the raw timelapse data and remove them from `osm_operating`.
+
+```{r}
+osm_obscured <- osm_data %>%
+  
+  filter(cameramalfunction == 'Fully obscured') %>%
+  
+  mutate(date = as.Date(datetime)) %>%
+  
+  select(array, site, date) %>% 
+  
+  distinct()
+```
+
+Let's remove those dates
+
+```{r}
+osm_operating <- osm_operating %>%
+  
+  anti_join(osm_obscured)
+                                 
+# Save the operating days file
+#write_csv(osm_operating, "./data/raw/OSM_operating_days.csv")
+```
+
+
+```{r}
+rm(osm_data, osm_obscured)
+```
+
+
+***
+
+
+# 2. Import Christina Lake data
+
+## 2.1 Import the 2017-2020 semi-cleaned OSM deployment data.
+
+Curiously, none of this data was present in Ladle's files even though 2017-Oct 2019 was present in the detection file. Either way, this will cover our basees for all years of Christina Lake data. 
+
+**Note**: some cameras were not retrieved in 'D1' deployment and left to run continuously until the 'D2' retrieval or batteries died. In the spreadsheet this was denoted as an NA. Since I needed a start/end date for each row to determine the days the camera was operating, I manually filled in these NA values with the 'service' date of the camera site immediately above that one before reading it into R. *This means that the end_date of D1 and the start_date of D2 are the same* -- the exact date used is meaningless, since all I care about is a list of the days that the camera was operating. Since the camera was operating continuously and the 'deployments' are meaningless information, this was the easiest solution that retained the overall format/integrity of the original data. 
+
+- e.g. D1: "2017-01-01 to NA" and D2: "NA to 2018-01-01" has been replaced with D1: "2017-01-01 to 2017-10-15" and D2: "2017-10-15 to 2018-01-01" so that the code below can recognize that the camera operated from 2017-01-01 to 2018-01-01 continuously. 
+
+```{r}
+cl_deploy <- read_csv("./data/raw/CL_deployment_2017.csv",
+                   col_types = cols(array = col_factor(),
+                                    site = col_factor(),
+                                    start_date = col_datetime(format = "%Y-%m-%d"),
+                                    end_date = col_datetime(format = "%Y-%m-%d"), 
+                                    camera_failure_details = col_character()
+                                    )
+          ) %>%
+
+            set_names(names(.) %>% 
+                        tolower() %>% 
+                        
+                        # replace the '.' with '_'
+                        str_replace_all(pattern = '\\.', # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                                        replacement = '_')) %>%  # what you want the pattern to be replaced with
+        
+            mutate(array = as.factor("Christina"), # remove prefix OSM from array
+                   site = str_replace(site, "CL", "") %>% as.numeric() %>% as.factor()
+                   )
+          #  filter(deployment_id == 'D3')
+
+   
+ggplot(cl_deploy, aes(color = array))+
+  
+  geom_segment(aes(x = start_date, 
+                   xend = end_date,
+                   y = site, 
+                   yend = site)) +
+  
+  theme(axis.text = element_text(size = 6))       
+```
+
+# 2.2. Generate a list of dates the CL cameras were working
+
+``` {r}
+cl_operating <- cl_deploy %>% 
+  
+  drop_na(start_date, end_date) %>%
+  
+  rowwise() %>%
+  
+  # create a list sequence of dates for each site from the first to the last day of operability
+  mutate(date = list(seq(from = date(start_date), to = date(end_date), by="day"))) %>% 
+    
+  unnest(date) %>%
+  
+  select(array, site, date)
+
+rm(cl_deploy)
+
+# Save the operating days file
+#write_csv(cl_operating, "./data/raw/CL_operating_days_2017-2020.csv")
+```
+
+## 2.3. Import the October 2019 onward Christina Lake timelapse data. 
+
+Import all of the Christina Lake timelapse data for the 'Deployment 3' time period and format some columns of interest. For some reason, this third deployment isn't in Andrew Ladle's files. 
+
+```{r}
+# This file contains Oct 2019 to 2020 deployment data, aka Christina Lake "D3". 
+cl_data <- read_csv("./data/raw/CL_timelapse_2019-2020.csv",
+                   col_types = cols(Folder = col_factor(),
+                                    Date = col_datetime(format = '%d-%b-%Y'),
+                                    Time = col_time(format = '%H:%M:%S'),
+                                    Total = col_integer(),
+                                    Comments = col_character(),
+                                    Species = col_factor(),
+                                    Site = col_factor(),
+                                    Snow = col_factor(),
+                                    Empty = col_logical())
+          ) %>%
+
+            set_names(tolower(names(.))) %>%
+            
+            mutate(datasource = paste0("./data/raw/CL_timelapse_2020.csv"),
+                   datetime = date + time,
+                   year = year(datetime), 
+                   month = month(datetime),
+                   day = day(datetime)) %>%
+  
+  mutate(# Brute force array name to Christina, to match ladle's file
+    array = as.factor("Christina"), 
+         # Remove CL prefix and leading zeros from site, to match Ladle's file
+    site = str_replace(site, "CL", "") %>% as.numeric() %>% as.factor()
+    ) %>% 
+#    site = as.factor(paste0(array, "_", camera) %>% gsub("_CL+", "_", .) %>% gsub("_0+", "_", .) )) %>% # remove leading zeros after the underscore
+  
+  select(file, relativepath, array, site, snow, datetime, year, month, day, classifier, species, total, comments, empty, datasource)
+
+levels(cl_data$site)
+```
+
+Let's inspect the CL data for any NAs, irregular values, or bad classes. 
+
+```{r warning=FALSE}
+str(cl_data)
+summary(cl_data)
+
+# where are the NAs coming from?
+# Site three parses date as NA in the Oct 2017 to Jan 2019 folder but it's extremely low data (1month only) so will discard that site later.  
+cl_data %>% filter(is.na(datetime))
+
+# one site is NA but this data is not an issue since it corrupted
+levels(cl_data$site)
+cl_data %>% filter(is.na(site))
+```
+
+Everything seems reasonable. Let's remove the unconcerning NA rows and tidy it all up into a final file of all positive detections and timestamps.  
+
+```{r}
+cl_detections <- cl_data %>%
+  filter(!is.na(site),  # remove the single missing row with no camera name (not useful)
+         !is.na(datetime),
+         empty==FALSE) %>% # remove the missing datetime stamps (92 images from one staff image event, not helpful either)
+
+  select(array, site, datetime, species, total) %>%
+  
+  filter(!is.na(species))
+
+#write_csv(osm_detections, "./data/raw/CL_all_detections_Oct2019-2020.csv")
+```
+
+``` {r}
+rm(cl_data)
+```
+
+
+***
+
+
+# 3. Import and merge data from the ancestral arrays. 
+
+## 3.1. Import and merge operating days data. 
+
+This was wonderfully prepared by Andrew Ladle. We will also renamne the Christina Lake sites to include a 'CL_' prefix to make their names a bit more precise. 
+
+```{r}
+all_operating <- read_csv('./data/raw/Ancestral_operating_days.csv',
+                          col_types = cols(Array = col_factor(),
+                                           Site = col_factor(),
+                                           Date = col_date())) %>%
+                          
+  set_names(tolower(names(.))) %>%
+  
+  select(-season, -week, -year) %>%
+  
+  bind_rows(osm_operating) %>%
+  
+  bind_rows(cl_operating) %>%
+  
+  mutate(site = case_when(array == "Christina" ~ paste0("CL_", site),
+                          array == "Bighorn" ~ paste0("BH_", site),
+                          array == "Whitefish" ~ paste0("WF_", site),
+                          array == "Beaverhills" ~ paste0("BV_", site),
+                          array == "Kananaskis" ~ paste0("KAN_", site),
+                          TRUE ~ as.character(site)) %>% as.factor(),  # append CL_ to the Christina sites for clarity.
+         month = month(date), 
+         year = year(date))
+```
+
+## 3.2. Import and merge all detection timestamps and data
+
+As above, we will also rename the Christina Lake sites to include a 'CL_' prefix to make their names a bit more precise. 
+```{r}
+all_detections <- read_csv('./data/raw/Ancestral_all_detections.csv',
+                           col_types = cols(Array = col_factor(),
+                                            Site = col_factor(),
+                                            Date.Time = col_datetime(),
+                                            Species = col_factor(),
+                                            Total = col_integer())) %>%
+  
+  set_names(names(.) %>% str_replace_all("\\.", "") %>% tolower()) %>%
+  
+  select(-date, -time, -timediff, -eventid) %>%
+  
+  bind_rows(osm_detections) %>%
+  
+  bind_rows(cl_detections) %>%
+  
+  mutate(site = case_when(array == "Christina" ~ paste0("CL_", site), # append CL_ to the Christina sites for clarity.
+                          array == "Bighorn" ~ paste0("BH_", site),
+                          array == "Whitefish" ~ paste0("WF_", site),
+                          array == "Beaverhills" ~ paste0("BV_", site),
+                          array == "Kananaskis" ~ paste0("KAN_", site),
+                          TRUE ~ as.character(site)) %>% as.factor(), 
+         species = tolower(species) %>% as.factor(),
+         month = month(datetime), 
+         year = year(datetime))
+```
+
+
+***
+
+
+# 4. Inspect the merged dataframes
+
+## 4.1. Inconsistent species names?
+
+Do any of the arrays describe the same species using different terms? Here is where we can clean that up:
+
+```{r}
+# Inspect data and identify inconsistent species
+str(all_detections)
+sort(levels(all_detections$species))
+
+# Correct and merge species names as needed
+all_detections <- all_detections %>% 
+  mutate(species = recode(species, 
+                          'wolf' = 'grey wolf',
+                          'river otter' = 'otter'))
+#                          'rabbit' = 'snowshoe hare')) 
+# we don't want to recode rabbit in case it's domestic (common in the Rockies near towns)
+```
+
+## 4.2. Do deployment dates make sense?
+
+Let's plot the operating days for each array and superimpose our independent detections. Is there anything that doesn't overlap? Extra detection data? Missing dates of operbility?
+
+``` {r}
+fig_operability <- ggplot(all_operating, aes(x = date, y = array)) +
+  geom_tile(height = 0.6) +  # Create horizontal tiles
+  geom_point(data = all_detections, aes(x = as.Date(datetime), y = array), color = "red", size = 0.1) +  # Add red dots for event_start
+
+ # scale_fill_grey() + 
+  #scale_fill_manual(values = sample(colors(), 40)) +  # Change fill color if needed
+  labs(title = "Timeline of Camera Operability",
+       x = "Date",
+       y = "Array") +
+    guides(fill = guide_legend(ncol = 2)) + # Set number of columns in the legend
+    scale_x_date(date_labels = "%Y", date_breaks = "12 months", minor_breaks = NULL) +  # 6-month interval
+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate date labels
+        axis.title.y = element_blank())  # Remove y-axis title  # Remove grid lines
+
+ggsave("./figures/all-arrays_detections_operability_range.png", fig_operability, width=10, height = 6)
+
+rm(fig_operability)
+```
+
+## 4.3. Remove detections that do not line up with operating dates (COARSE FILTER)
+
+There are very few of these (only Yellowhead). This could be due to a timestamp error or a few days of missing operability data, but in any case it is reasonable to simply delete them. 
+
+```{r}
+# Inspect data
+str(all_detections)
+
+# Correct species names as needed
+all_detections <- all_detections %>% 
+  filter(!(array == "Yellowhead" & year(datetime)>=2015)) # there are two points of data in the yellowhead 
+```
+
+## 4.4. Consistent site and array names between files?
+
+```{r}
+# arrays in detection data that are NOT in operating dates data
+setdiff(all_detections$array, all_operating$array)
+# arrays in operating dates data that are NOT in detection data
+setdiff(all_operating$array, all_detections$array)
+
+# sites in detection data that are NOT in operating dates data
+setdiff(all_detections$site, all_operating$site)
+# sites in operating dates data that are NOT in detection data
+setdiff(all_operating$site, all_detections$site)
+```
+
+Array names are all good to go! 
+
+There are three sites (RICH22,  RICH56, J_Cairn) for which we have operating data but no detection data. There is only operating day for RICH56, so we can simply remove it from the operating dataframe. RICH22 and J_Cairn are entirely missing its data (from 2017-11-13 to 2019-11-29), which is a bit more concerning. It could be due to corrupted SD cards, undocumented theft, or just plain old missing data. Unless I can track down that data, we will remove those rows from the operating frame to avoid creating false absences in our data. 
+
+There are also 10 sites from the Yellowhead array that are named inconsistently. Detection data uses a period in the name ('J_Rocky.Forks') but operating uses a space ('J_Rocky Forks'). This should be an easy fix.
+
+```{r}
+all_detections <- all_detections %>% 
+  # Remove spaces
+  mutate(site = if_else(array == "Yellowhead", str_replace_all(site, "\\.", " "), site) %>% as.factor())
+
+all_operating <- all_operating %>%
+  filter(site %nin% c("RICH22", "RICH56", "J_Cairn")) %>% # remove the problematic Richardson sites for now
+  mutate(site = recode(site, "J_Medicine tent" = "J_Medicine Tent"))
+```
+
+Let's double check the site names:
+```{r}
+# sites in detection data that are NOT in operating dates data
+setdiff(all_detections$site, all_operating$site)
+# sites in operating dates data that are NOT in detection data
+setdiff(all_operating$site, all_detections$site)
+```
+
+All good!
+
+Let's do a more thorough check. This is the same graph as before, but this will let us identify gaps for EACH SITE rather than overall across arrays. This will help identify if a camera is tagged as working, but there is a long gap in the data. 
+
+``` {r}
+for(i in unique(all_operating$array)) {
+  print(i)
+  array_operating <- all_operating %>% filter(array == i)
+  array_detections <- all_detections %>% filter(array == i)
+
+  fig_site_operability <- ggplot(array_operating, aes(x = date, y = site)) +
+    geom_tile(height = 0.8, fill = "grey70") +  # Create horizontal tiles
+    geom_tile(data = array_detections, aes(x = as.Date(datetime), y = site), fill = "red", height = 0.3) +  # Add red dots for event_start
+    #scale_fill_grey() + 
+    #scale_fill_manual(values = sample(colors(), 40)) +  # Change fill color if needed
+    labs(title = paste0(i, ": Camera Operability and Data Availability"),
+         x = "Date",
+         y = "Site") +
+      guides(fill = guide_legend(ncol = 2)) + # Set number of columns in the legend
+      scale_x_date(date_labels = "%Y", date_breaks = "12 months", minor_breaks = NULL) +  # 6-month interval
+  
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate date labels
+          axis.title.y = element_blank()) +  # Remove y-axis title  # Remove grid lines
+    theme(
+      panel.grid.major.y = element_blank(),  # Remove horizontal grid lines
+      panel.grid.minor.y = element_blank(),  # Also remove minor horizontal grid lines
+      axis.text.y = element_text(size = 6)  # Adjust y-axis font size (change 10 as needed)
+    )
+  
+  ggsave(paste0("./figures/arrays/", i, "_detections_operability_range.png"), fig_site_operability, width=12, height = 15)
+
+  rm(array_operating, array_detections, fig_site_operability)
+}
+```
+
+From the exercise above, it's clear some sites had no detections for >1 year at a time. This seems like it may be an issue arising from either 1) missing data, or 2) incorrect camera operability (i.e. a camera *was not* actually working during that time period). All of the culprits come from the Kananaskis Array and the Bighorn Array. This will need to be explored in-depth at a later date. 
+
+
+Save the clean(ish) data. 
+```{r}
+write_csv(all_operating, "./data/processed/all-arrays_operating_days.csv")
+
+write_csv(all_detections, "./data/processed/all-arrays_raw_detections.csv")
+```
+
+
+# 5. Calculate response metrics
+
+## 5.0. Species of interest
+
+First, specify the species we're interested in:
+
+```{r}
+species_of_interest <- c('bison', 'black bear', 'bobcat', 'cougar', 'caribou', 'coyote', 'elk', 'fisher', 'grey wolf', 
+                         'grizzly bear', 'lynx', 'marten', 'moose', 'mule deer', 'porcupine',
+                         'red fox', 'red squirrel', 'ruffed grouse', 'snowshoe hare', 'spruce grouse', 
+                         'striped skunk', 'white-tailed deer', 'wolverine')
+```
+
+## 5.1. Calculate independent detections
+
+We will use the standard 30 minute threshold. 
+
+```{r}
+
+mins <- 30 #30 minute threshold for independent detections
+
+all_indet <- all_detections %>%
+  
+  drop_na(species) %>%
+  
+  arrange(site, species, datetime) %>%
+  
+  group_by(species, site) %>%
+  
+  # independent detections based on 30min threshold
+  mutate(
+    #DateTime2 = as.POSIXct(datetime), # convert to seconds. Might be redundant code, this function was embedded from previous code written by Aidan.
+    timediff = c(difftime(datetime, lag(datetime), 
+                          units = "mins")), # time difference from prev photo
+    detection_id = cumsum(if_else(is.na(timediff) | timediff > mins,  # Create episode IDs to distinguish detections 
+                               1, 
+                               0))) %>%
+  
+  ungroup() %>%
+  
+  group_by(array, species, site, detection_id, year, month) %>%
+  
+  summarize(event_start = min(datetime), event_end = max(datetime)) %>%
+
+  ungroup()
+
+write_csv(all_indet,
+          './data/processed/all-arrays_independent_detections.csv')
+
+```
+
+## 5.2. Total Independent Detections per Site:
+
+To do this we use the detections data we created earlier from the raw Timelapse data. We need to group by site and species and then we can use the `summarise()` function with the `n()` function to count the total detections.
+
+After that we ungroup the data so if we run an analysis or make a plot it doesn't stay grouped and then we use the `pivot_wider()` function to make a column for each species and a row for each site.
+
+Finally we need to replace any NAs with zeros (the `n()` function function won't insert a zero if there aren't any observations to count so these NAs are indeed zeros)
+
+``` {r}
+all_indet_site <- all_indet %>% 
+  
+  filter(species %in% species_of_interest) %>%
+  
+  # group by site and species to count detections
+  group_by(array, site, species) %>% 
+  
+  # use summarise to count detections per species per site
+  summarise(detections = n()) %>% 
+  
+  ungroup() %>% 
+  
+  pivot_wider(names_from = species,
+              values_from = detections) %>% 
+  
+  # replace NAs with 0 in all species columns
+  mutate(across(
+    where(is.numeric),
+    ~ replace_na(., 0)))
+  
+```
+
+Now that this data is formatted we should save it to the data/processed folder for use later
+
+```{r save total ind det}
+
+# save csv file to processed data folder 
+write_csv(all_indet_site,
+          './data/processed/all-arrays_total_detections_per_site_focalspp.csv')
+```
+
+
+## 5.3. Calculate WEEKLY presence-absence
+
+Let's start splitting the data into weekly presence absence. 
+First, organize our independent detections into weekly bins. These will be the weeks of true presence (presence==1) in our final dataset. 
+
+```{r}
+all_presence_weeks <- all_indet %>%
+  
+  filter(species %in% species_of_interest) %>%
+  
+  mutate(week = floor_date(event_start, "week")) %>%
+  
+  distinct(array, site, species, week) %>% # keep one copy of detections for each week
+  
+  #filter(week %in% all_operating_weeks$week) %>% # retain only the data for weeks with sufficient number of days >4. The rest we don't want. 
+  
+  mutate(presence = 1)
+```
+
+Then, make a list of all weeks for which we have data. This will help identify the weeks where a species was absent (i.e., 'true' absence).
+
+```{r}
+all_operating_weeks <- all_operating %>%
+  
+  mutate(week = floor_date(date, "week")) %>%
+  
+  group_by(array, site, week) %>%
+  
+  summarize(n_days = n()) %>%
+  
+  filter(n_days >= 4) # retain weeks where there are 4 days of data only.
+
+```
+
+Finally, let's merge our weekly presence into the list of *all* operating weeks. Where NAs are introduced into the *presence* column, there was no detection of the given species in that week. We will replace these NAs with "0" to denote 'true' absence. 
+
+```{r}
+all_weekly_pa <- all_operating_weeks %>%
+  
+  crossing(species = unique(as.character(all_presence_weeks$species))) %>%
+  
+  left_join(all_presence_weeks, by = c("array", "site", "week", "species")) %>%
+  
+  mutate(presence = replace_na(presence, 0),
+         species = as.factor(species),
+         year = year(week))  # Fill missing detections with 0
+
+str(all_weekly_pa)
+
+```
+
+Save the results and clean up:
+
+```{r}
+write_csv(all_weekly_pa, "./data/processed/all-arrays_weekly_pa.csv")
+
+rm(all_operating_weeks, all_presence_weeks)
+```
+
+## 5.3. Calculate MONTHLY presence-absence
+
+Let's start splitting the data into monthly presence absence. First, organize our independent detections into monthly bins. These will be the months of true presence (presence==1) in our final dataset. 
+
+```{r}
+all_presence_months <- all_indet %>%
+  
+  filter(species %in% species_of_interest) %>%
+
+  distinct(array, site, species, month, year) %>% # keep one copy of detections for each month/year
+  
+#  filter(month %in% all_operating_months$month) %>% # retain only the data for weeks with sufficient number of days >4. The rest we don't want. 
+  
+  mutate(presence = 1)
+```
+
+Then, make a list of all months for which we have data. This will help identify the months where a species was absent (i.e., 'true' absence).
+
+```{r}
+all_operating_months <- all_operating %>%
+  
+  group_by(array, site, month, year) %>%
+  
+  summarize(n_days = n()) %>%
+  
+  filter(n_days >= 15) # retain months where there are 15 days of data only.
+
+```
+
+Finally, let's merge our monthly presence into the list of *all* operating months. Where NAs are introduced into the *presence* column, there was no detection of the given species in that month. We will replace these NAs with "0" to denote 'true' absence. 
+
+```{r}
+all_monthly_pa <- all_operating_months %>%
+  
+  crossing(species = unique(as.character(all_presence_months$species))) %>%
+  
+  left_join(all_presence_months, by = c("array", "site", "species", "month", "year")) %>%
+  
+  mutate(presence = replace_na(presence, 0), # Fill missing detections with 0
+         species = as.factor(species)) 
+```
+
+Save results and clean up:
+
+```{r}
+write_csv(all_monthly_pa, "./data/processed/all-arrays_monthly_pa.csv")
+
+rm(all_operating_months, all_presence_months)
+```
+
+
+***
+
+
+# End of script. 
+
+```{r}
+stop()
+```
+
+
+***
+
+
+# Old code chunks (do not run). 
+
+```{r}
+
+  rich <- read_csv('./data/raw/archive/RICH_deployment_2017.csv',
+                     
+                     # specify how we want the columns read in 
+                     col_types = cols(Project.ID = col_factor(),
+                                      Deployment.Location.ID = col_factor(),
+                                      Camera.Deployment.Begin.Date = col_date(
+                                        format = "%Y-%m-%d"),
+                                      Camera.Deployment.End.Date = col_date(
+                                        format = "%Y-%m-%d"),
+                                      .default = col_character())) %>% 
+                     # the date columns could be read in as such if we needed but I don't think we use them and the date format is odd to get R to read
+    
+    # set the column names to lower case and replace the '.' with '_' (these are both personal preferences of mine)
+    set_names(
+      names(.) %>% 
+        tolower() %>% 
+        
+        # replace the '.' with '_'
+        str_replace_all(pattern = '\\.', # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                        replacement = '_')) %>%  # what you want the pattern to be replaced with
+    
+    # rename start and end date so they are shorter
+    # rename project_id and deployment_location_id so they match previous years' columns
+    rename(start_date = camera_deployment_begin_date,
+           end_date = camera_deployment_end_date,
+           array = project_id,
+           site = deployment_location_id) %>%
+    
+    mutate(array = str_remove(array, pattern = "OSM_"), # remove prefix OSM from array
+           site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+            gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+             gsub(" ", "", .) %>% # Then, remove any spaces
+            as.factor(.) # Then, convert back to factor
+           ) %>%
+
+    select(!c(deployment_id)) # remove columns we don't need. We will keep the camera_failure_details since it helps verify errors later on
+
+```
+
+
+
+

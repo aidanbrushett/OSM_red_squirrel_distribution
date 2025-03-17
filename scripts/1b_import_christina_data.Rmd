@@ -1,0 +1,829 @@
+---
+title: "Christina Lake: Import camera data, covariates, and calculate independent detections"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+***
+
+
+# 0. Before you begin
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+
+***
+
+
+# 1. Set up workspace
+
+## 1.1. Install packages
+
+If you don't already have the following packages installed, use the code below to install them.
+```{r install, eval=FALSE}
+list.of.packages <- c("tidyverse", "sf", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+rm(new.packages, list.of.packages)
+```
+
+## 1.2. Load libraries
+
+And a couple custom functions that can help with masking issues from package loading:
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list=ls()) # clear environment
+
+library(tidyverse) # data tidying, visualization, and much more; this will load all tidyverse packages, can see complete list using tidyverse_packages()
+library(ggplot2) # pretty plots
+library(sf) # for writing and copying files and directories
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+
+***
+
+
+# 2. Import Christina image data
+
+This comes straight from the Christina Lake repo (https://github.com/ACMElabUvic/Christina_Lake) and was cleaned/organized by Andrew Barnas in that location. We will only perform minimal QAQC as a result. 
+
+```{r}
+cl_image <- read_csv("./data/raw/CL_detections_raw_2011-2020.csv",
+                   # Specify column types
+                   col_types = cols(site = col_factor(),
+                                    treatment = col_factor(), 
+                                    datetime = col_datetime(format = "%Y-%m-%d %H:%M:%S"),
+                                    species = col_factor())
+                   ) %>%
+    # Append the array prefix to all sites
+    mutate(site = paste0("CL_", site) %>% as.factor()) %>%
+  
+  # Create some extra columns
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array',
+                                 'camera'),
+                       cols_remove = FALSE) %>% 
+      
+  # specify format of new columns
+  mutate(
+    array = as.factor(array),
+    camera = as.factor(camera)
+    )
+
+```
+
+Let's inspect the CL data for any NAs, irregular values, or bad classes. 
+
+```{r warning=FALSE}
+str(cl_image)
+summary(cl_image)
+
+# where are the NAs coming from?
+# No NAs are present
+cl_image %>% filter(is.na(datetime))
+
+# No sites are NA either. 
+levels(cl_image$site)
+cl_image %>% filter(is.na(site))
+```
+
+```{r}
+# quick filter in case any cases show up, we'll just brute force remove them
+cl_image <- cl_image %>%
+  
+  filter(!is.na(site),  # remove the single missing row with no camera name (not useful)
+         !is.na(datetime), # remove the missing datetime stamps (92 images from one staff image event, not helpful either)
+         !is.na(species)
+         )
+
+#write_csv(cl_image, "./data/raw/cl_detections_raw_2021-2023.csv")
+
+```
+
+Independent detections:
+
+We will use a 30-minute independent detection threshold. 
+
+```{r}
+mins <- 30 #30 minute threshold for independent detections
+```
+
+However, a 10-minute threshold correlated best with snowshoe hare density in this paper, so it could be worth considering at a later date:
+
+Villette, P., Krebs, C.J. & Jung, T.S. Evaluating camera traps as an alternative to live trapping for estimating the density of snowshoe hares (Lepus americanus) and red squirrels (Tamiasciurus hudsonicus). Eur J Wildl Res 63, 7 (2017). https://doi.org/10.1007/s10344-016-1064-3
+
+```{r}
+cl_indet <- cl_image %>%
+  
+  drop_na(species) %>%
+  
+  arrange(site, species, datetime) %>% # must be in order for this to work. 
+  
+  group_by(species, site) %>%
+  
+  # independent detections based on 30min threshold
+  mutate(
+    #DateTime2 = as.POSIXct(datetime), # convert to seconds. Might be redundant code, this function was embedded from previous code written by Aidan.
+    timediff = c(difftime(datetime, lag(datetime), 
+                          units = "mins")), # time difference from prev photo
+    detection_id = cumsum(if_else(is.na(timediff) | timediff > mins,  # Create episode IDs to distinguish detections 
+                               1, 
+                               0))) %>%
+  
+  ungroup() %>%
+  
+  group_by(array, camera, site, species, detection_id) %>%
+  
+  summarize(event_start = min(datetime), event_end = max(datetime)) %>%
+
+  ungroup() %>%
+  
+  select(-detection_id) %>%
+  
+  # We will pull out the first and last timestamp of an event. This is a very coarse measure of event duration. 
+  mutate(year = year(event_start),
+         month = month(event_start))
+  
+  # This is a filter we could apply to the detection data if we wanted. For now we'll leave it in!
+#  filter(year <= 2015)
+
+write_csv(cl_indet,
+          './data/processed/CL_independent_detections_2011-2020.csv')
+```
+
+# 3. Import Christina deployment data
+
+Import the raw deployment spreadsheet obtained from GitHub:
+
+```{r}
+cl_deploy <- read_csv('./data/raw/CL_deployment_2011-2020.csv',
+                   col_types = cols(site = col_factor(),
+                                    UTME = col_number(), 
+                                    UTMN = col_number(), 
+                                    treatment = col_factor(), 
+                                    start_date = col_datetime(format = "%Y-%m-%d"),
+                                    end_date = col_datetime(format = "%Y-%m-%d"))
+                   ) %>%
+  
+  select(-camera_check) %>%
+  
+  mutate(site = paste0("CL_", site) %>% as.factor()) %>%
+  
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array',
+                                 'camera'),
+                       cols_remove = FALSE) %>% 
+      
+      # specify format of new columns
+  mutate(
+    array = as.factor(array),
+    camera = as.factor(camera)
+    )
+```
+
+Inspect the data:
+
+```{r}
+# Inspect it
+ggplot(cl_deploy, aes(color = array))+
+  
+  geom_segment(aes(x = start_date, 
+                   xend = end_date,
+                   y = site, 
+                   yend = site)) +
+  
+  theme(axis.text = element_text(size = 6))   
+```
+
+List of dates:
+
+For my project, we are only interested in PRE-CULL DATA. Moving forward, we could use a coarse filter to remove any data, sites, covariates, or deployment dates from the post-cull period. For now, we will keep this data in. We will subset the Christina data to the data that we actually want in script 3, where we start to build our dataset for analysis. 
+
+```{r}
+cl_operating <- cl_deploy %>% 
+  
+  drop_na(start_date, end_date) %>%
+  
+  rowwise() %>%
+  
+  # create a list sequence of dates for each site from the first to the last day of operability
+  mutate(date = list(seq(from = date(start_date), to = date(end_date), by="day"))) %>% 
+    
+  unnest(date) %>%
+  
+  select(array, camera, site, treatment, date) # %>%
+  
+#  filter(year(date) <=2015)
+```
+
+Write the file:
+
+```{r}
+write_csv(cl_operating, "./data/processed/CL_operating_2011-2020.csv")
+rm(cl_deploy)
+```
+
+
+# 4. Import Christina covariate data
+
+The code below will 
+
+1. Provide the path and filenames of the two csv files we need    
+2. Read them in and specify the column types    
+3. Set the column names to lowercase, remove the feature_ty prefix in each column, and replace dashes with underscores    
+4. then create two additional columns, array and camera from the site column information    
+5. finally set the names of each item in the list as HFI for human footprint inventory and VEG for and landcover data  
+
+```{r import covariate data}
+
+# these data files have a similar format so we will read them in together using the map() function in the purrr package
+
+covariate_data <-    
+  # provide file path (e.g. folders to find the data)
+  file.path('data/raw/',
+            
+            # provide the file names
+            c('Christina_HFI_2010_20250211.csv',
+              'Christina_VEG_2010_20250211.csv')) %>%
+  
+  # use purrr map to read in files, the ~.x is a placeholder that refers to the object before the last pipe (aka the list of data we are reading in) so all functions inside the map() after ~.x will be performed on all the objects in the list we provided
+  map(~.x %>%
+        read_csv(.,
+                 
+                 # specify how to read in the various columns
+                 col_types = cols(Site = col_factor(),
+                                  BUFF_DIST = col_integer(),
+                                  .default = col_number())) %>%
+        
+        
+        
+        # set the column names to lower case
+        set_names(
+          names(.) %>% 
+            tolower()) %>% 
+        
+        mutate(site = paste0("CL_", site) %>% as.factor()) %>%
+        
+        separate_wider_delim(site,
+                             delim = '_',
+                             names = c('array', 'camera'),
+                             cols_remove = FALSE) %>% 
+            
+                  # specify format of new columns
+        mutate(array = as.factor(array),
+               camera = as.factor(camera))
+  ) %>%
+        
+        # set the names of the two files in the list, if you don't run this they will be named numerically (e.g. [1], [2]) which can get confusing
+        purrr::set_names('HFI',
+                         'VEG')
+
+# will get a warning about parsing issues, don't panic it is fine
+
+```
+
+Even though we set some of the columns to read in as a specific type in the data import step it's always a good idea to check internal structure. 
+
+```{r}
+str(covariate_data)
+```
+
+
+From a quick glance everything looks good. 
+Now let's check that all the sites are accounted for, there should be ~100 just like with the timelapse data
+
+```{r}
+levels(covariate_data$HFI$site)
+levels(covariate_data$VEG$site)
+```
+
+
+```{r covariates setdiff}
+# there are 155 for both and don't see any glaring issues but let's check that all these site names match each other using the setdiff function
+setdiff(levels(covariate_data$VEG$site),
+        levels(covariate_data$HFI$site))
+
+# no mismatches
+
+# we need to check that they also match the detection data
+setdiff(levels(cl_indet$site),
+        levels(covariate_data$HFI$site))
+# CL65 and CL66 were deployed post-cull only so it doesn't matter. 
+
+# reverse the order to see if anything is extra in the covariate data
+setdiff(levels(covariate_data$HFI$site),
+        levels(cl_indet$site))
+# we extracted for CL_11 for some reason, but we do not care about this since there is no data for it. We'll keep it for now just in case it comes up later. 
+
+# also, just to confirm: the sites and deployment dates line up perfectly :)
+setdiff(levels(cl_indet$site),
+        levels(cl_operating$site))
+
+```
+
+Column names
+
+We should check that the column names all look good, there are a ton for the HFI data frame so we won't look at each of the features individually but check that the general formatting/naming is okay
+
+```{r HFI names}
+
+names(covariate_data$HFI)
+```
+
+These look okay but we should replace the dash '-' with and underscore '_' to match formatting of other files and because it's easier for R to work with.
+
+Let's check the VEG data too
+
+```{r VEG names}
+
+names(covariate_data$VEG)
+```
+Let's check the summary for any NAs that shouldn't be in the data, mostly we are looking for NAs in the site or buff_dist columns
+
+```{r}
+summary(covariate_data$HFI)
+summary(covariate_data$VEG)
+```
+
+Everything looks good!
+
+Data formatting
+ 
+As with the previous sections this section will likely change each year but offers a good starting point, and I do all the data manipualtion in one code chunk but run each portion individually as I build the chunk to make sure it's working.
+
+This code will do the following data formatting on both files simultaneously using purrr::map
+
+1. Change the column names - remove the feature_ty prefix in each column and replace dashes with underscores    
+2. then create two additional columns, array and camera from the site column information    
+5. finally set the new variables as factors
+
+```{r format covariate data}
+
+ covariate_data_fixed <- covariate_data %>% 
+  
+  map(
+    ~.x %>% 
+      
+      set_names(
+        names(.) %>% 
+          # remove the FEATURE_TY in front of all the column names because it's not helpful. Not present anyway in 2023
+          str_remove(pattern = "feature_ty") %>% 
+          
+          # replace the '.' with '_' in the feature column names
+          str_replace_all(pattern = '-', # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                          replacement = '_')))  # what you want the pattern to be replaced with
+      
+
+```
+
+Now let's recheck the data, data structure, and the sites with the deployment data, you can run each of these individually or all at once and review each one
+
+```{r covs data fixed site check}
+
+# check structure of variables
+str(covariate_data_fixed)
+
+# take a look at the column names
+names(covariate_data_fixed$HFI)
+names(covariate_data_fixed$VEG)
+
+```
+
+Join covariate data
+
+Now we need to join the HFI and VEG files together
+
+```{r join covariate data}
+covariates_merged <- covariate_data_fixed$HFI %>% 
+  
+  #use full join in case any issues with missing observations but we should be good since we checked the site names
+  full_join(covariate_data_fixed$VEG,
+            by = c('array', 'camera', 'site', 'buff_dist')) %>%
+  
+  select(-any_of('feature_area')) %>% # This is an unused helper column from Emerald's covariate script that can be discarded
+  
+  select(1:5, sort(names(.)[-(1:5)]))
+```
+
+We can also check that all sites are present
+
+```{r bind data str}
+str(covariates_merged)
+```
+
+Looks like everything read in correctly, I don't see any missing columns (we won't need the lab or gridcll column which we can deselect later),  and all the arrays (LUs) and sites are accounted for. 
+
+
+In the code chunk below I,
+
+1. remove the camera, lab, and gridcll columns we don't need   
+2. reorder columns alphabetically except array, site, and buffer_dist which will be at the front  
+3. replace NAs with zeros     
+
+Then we run summary to check that everything worked. (If you have other formatting to do you may need to use other functions to check that everything worked)
+```{r bind data formatting}
+
+covariates_fixed <- covariates_merged %>% 
+  
+  # remove columns we won't use anymore
+  select(!c(camera)) %>%  
+  
+  # order columns alphabetically
+  select(order(colnames(.))) %>% 
+  
+  # we want to move the columns that aren't HFI features or landcover to the front
+  relocate(.,
+           c(array,
+             site,
+             buff_dist)) %>% 
+  
+  # replace NAs introduced from joining data to zeros
+  replace(is.na(.),
+          0)
+
+# check that everything looks good  
+summary(covariates_fixed)
+  
+```
+
+
+Save data if we want to (will not save it for now since it's an intermediate file)
+
+```{r save bind data, include = FALSE}
+# save data in data raw folder
+#write_csv(covariates_fixed, #'data/raw/CL_covariates_merged_2011-2014.csv')
+```
+
+
+Group covariates
+
+As we prepare to lump the covariates together, we may need to reference the column names. Let's print that now so we have it fresh in the console. 
+
+```{r covs names}
+names(covariates_fixed)
+```
+
+Now we will use the `mutate()` function with some tidyverse trickery (i.e., nesting `across()` and `contains()` in `rowsums()`) to sum across each observation (row) by searching for various character strings. If there isn't a common character string for multiple variables we want to sum then we provide each one individually. We can also combine these methods (e.g., with 'facilities' [see code]).
+
+> This follows the same convention as the OSM covariate groupings. Anything annotated with a `#` is a variable that was present in the HFI but not present in any of the Christina Lake data. It throws an error. If re-running this code on new sites, these should be 'un-annotated' so that they are incorporated into the grouped covariates properly. 
+
+```{r format covs}
+covariates_grouped <- covariates_fixed %>% 
+  
+  # rename 'vegetated_edge_roads so that we can use road as keyword to group roads without including this feature
+  rename('vegetated_edge_rds' = vegetated_edge_roads) %>% 
+  
+  # within the mutate function create new column names for the grouped variables
+  mutate(
+    # borrowpits
+    borrowpits = rowSums(across(contains('borrowpit'))) + # here we use rowsums with across() and contains() to sum acrross each row any values for columns that contain the keyword above. Be careful when using that there aren't any variables that match the string (keyword) provided that you don't want to include!
+      
+      #dugout +
+      lagoon +
+      sump,
+    
+    
+    # clearings
+    clearings = rowSums(across(contains('clearing'))) +
+      runway,
+    
+    # cultivations
+    cultivation = 0, #crop + 
+      #cultivation_abandoned +
+      #fruit_vegetables +
+      #rough_pasture +
+      #tame_pasture,
+    
+    # harvest areas
+    harvest = rowSums(across(contains('harvest'))),
+    
+    # industrial facilities
+    facilities = rowSums(across(contains('facility'))) +
+      rowSums(across(contains('plant'))) +
+      camp_industrial +
+      #mill +
+      #ris_camp_industrial +
+      #ris_tank_farm +
+      #ris_utilities +
+      urban_industrial,
+    
+    # mine areas
+    mines = rowSums(across(contains('mine'))) +
+      rowSums(across(contains('tailing'))) +
+      grvl_sand_pit, # +
+      #peat, # +
+      #ris_drainage +
+      #ris_oilsands_rms +
+      #ris_overburden_dump +
+      #ris_reclaim_ready +
+      #ris_soil_salvaged +
+      #ris_waste,
+    
+    # railways
+    railways = rowSums(across(contains('rlwy'))),
+    
+    # reclaimed areas
+    reclaimed = rowSums(across(contains('reclaimed'))), # +
+      #ris_soil_replaced +
+      #ris_windrow,
+    
+    # recreation areas
+    recreation = campground +
+      #golfcourse +
+      greenspace +
+      recreation,
+    
+    # residential areas (can't use residence as keyword because 'residence_clearing' is in clearing unless we rearrange groupings or rename that one)
+    residential = country_residence +
+      rural_residence, # +
+      #urban_residence,
+    
+    # roads (we renamed 'vegetated_edge_roads' above to 'vegetated_edge_rds' so we can use roads as keyword here which saves a bunch of coding as there are many many road variables)
+    roads = rowSums(across(contains('road'))) +
+      #interchange_ramp +
+      airp_runway +
+      #ris_airp_runway +
+      transfer_station,
+    
+    # seismic lines
+    seismic_lines = pre_low_impact_seismic,
+    
+    # 3D sesimic lines (put the 3D at the end though to make R happy)
+    seismic_lines_3D = low_impact_seismic,
+    
+    # transmission lines
+    transmission_lines = rowSums(across(contains('transmission'))),
+    
+    # trails
+    trails = rowSums(across(contains('trail'))),
+    
+    # vegetated edges
+    veg_edges = rowSums(across(contains('vegetated'))) +
+      surrounding_veg,
+    
+    # man-made water features
+    water = canal, #+
+      #reservoir,
+    
+    # well sites (this probably includes 'clearing_wellpad' need to check)
+    wells = rowSums(across(contains('well'))),
+    
+    # remove columns that were used to create new columns to tidy the data frame
+         .keep = 'unused') %>% 
+  
+  # reorder alphabetically except array, site and buff_dist
+  select(order(colnames(.))) %>% 
+  
+  # we want to move the columns that aren't HFI features or landcover to the front
+  relocate(.,
+           c(array,
+             site,
+             buff_dist)) %>% 
+  
+  # reorder variables so the veg data is after all the HFI data
+  relocate(starts_with('lc_class'),
+           .after = wells)
+```
+
+Check results:
+
+```{r}
+# see what's left
+names(covariates_grouped)
+
+# check the structure of new data
+str(covariates_grouped)
+
+# check summary of new data
+summary(covariates_grouped)
+```
+
+Remove NA values from the columns. There shouldn't be any.
+
+```{r remove na from covs, eval = FALSE}
+covariates_grouped <- covariates_grouped %>% 
+  
+  # remove rows with NAs
+  na.omit()
+```
+
+
+Group covariates further:
+
+Let's modify this data and remove those features for now **this step will need to be changed each year likely**. For now we are following the EXACT conventions used for the OSM data so that we retain the exact same covariates and the exact same methods among arrays. 
+
+Let's also rename the landcover classes so they make more sense without having to look them up by number (*maybe should add this to script earlier for next year*)
+
+```{r covs remove features}
+
+covariates_grouped_final <- covariates_grouped %>% 
+  
+  # create column osm_industrial
+  mutate(
+    osm_industrial = borrowpits +
+    clearings +
+    facilities +
+    mines,
+    
+    # remove columns we used to make this variable
+    .keep = 'unused') %>% 
+  
+  # remove other features we don't need
+  select(!c(#cfo,
+            cultivation,
+            reclaimed,
+            recreation,
+            residential,
+            water,
+            #lc_class20, this has more variation as of 2023 and can be retained!
+            #lc_class120,
+            #lc_class32,
+            lc_class33,
+            #landfill,
+            railways)) %>%
+  
+  # rename landcover classes
+  rename(
+    lc_grassland = lc_class110,
+    lc_coniferous = lc_class210,
+    lc_broadleaf = lc_class220,
+    lc_mixed = lc_class230,
+    lc_developed = lc_class34,
+    lc_shrub = lc_class50,
+    lc_water = lc_class20) # newly added in 2023 script since there's now more variation 
+
+# check that it worked
+names(covariates_grouped)
+```
+
+We could save this at this point if we wanted to, now that it's all formatted and grouped.
+
+```{r save grouped data, eval = FALSE, include = FALSE}
+write_csv(covariates_grouped_final,
+          'data/raw/CL_covariates_grouped_2011-2014.csv')
+```
+
+Let's make a final data product and clean up the workspace a bit:
+
+```{r}
+cl_covs <- covariates_grouped_final %>%
+  
+  select(-array) %>%
+  
+  # recreate the camera column that was lost
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array', 'camera'),
+                       cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+  mutate(
+         array = as.factor(array),
+         camera = as.factor(camera)
+         )
+```
+
+Now let's clean up our workspace. 
+
+```{r}
+rm(list = ls()[str_detect(ls(), "covariate")])
+```
+
+We may want each buffer to have it's own column for each variable (e.g. create a wide format of this data) for modeling purposes, we can do that with the `pivot_wider()` function. 
+
+```{r wide format covariates}
+# we also may want to pivot wider so that each column is for a different buffer for modeling purposes, we can use pivot wider to do this
+
+cl_covs_wide <- cl_covs %>% 
+  
+  # pivot wider was not collapsing the data very well with the camera and array variables present. 
+  # let's remove them first. 
+  select(site, buff_dist, harvest:osm_industrial) %>% 
+
+  # wide data
+  pivot_wider(names_from = buff_dist,
+              values_from = c(harvest:osm_industrial)) %>%
+  
+  # let's re-add the array and camera columns that we previously lost.
+  # this code is redundant but seems to help `pivot_wider` do its job. 
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array',
+                                 'camera'),
+                       cols_remove = FALSE) %>%
+  
+  # specify format of new columns
+  mutate(array = as.factor(array),
+         camera = as.factor(camera)) %>%
+  
+  as.data.frame(.)
+
+str(cl_covs_wide)
+```
+
+# 5. Import Christina lake coordinates
+
+This file was originally: Christina Lake/4. Deployment Data/Christina_Lake_2011_Deployment_Data.xlsx
+
+```{r}
+cl_coords <- read_csv("./data/raw/CL_Deployment_Site_Data_2011-2014.csv",
+                      col_types = cols(Site = col_factor(),
+                                       Latitude = col_number(),
+                                       Longitude = col_number())
+                      ) %>%
+  
+          # set the column names to lower case
+        set_names(
+          names(.) %>% 
+            tolower()) %>% 
+        
+        mutate(site = paste0("CL_", site) %>% as.factor()) %>%
+        
+        separate_wider_delim(site,
+                             delim = '_',
+                             names = c('array', 'camera'),
+                             cols_remove = FALSE) %>% 
+            
+                  # specify format of new columns
+        mutate(array = as.factor(array),
+               camera = as.factor(camera)) %>%
+  
+  select(array, camera, site, latitude, longitude)
+
+```
+
+Get UTM coordinates (NAD83 UTM 12N)                    
+       
+```{r}
+# assuming lat/long was extracted in NAD83
+cl_coords <- st_as_sf(cl_coords, coords = c("longitude", "latitude"), crs = 4269) %>% 
+  
+  mutate(long = st_coordinates(.)[,1],
+         lat = st_coordinates(.)[,2]) %>%
+  
+  st_transform(cl_coords, crs = 26912) %>%
+  
+  mutate(easting_12n = st_coordinates(.)[,1],
+         northing_12n = st_coordinates(.)[,2]) %>%
+  
+  st_drop_geometry(.)
+
+```
+                     
+Join the coordinates to the covariate data.
+
+```{r}
+cl_covs_wide <- cl_coords %>%
+  
+  left_join(cl_covs_wide, by = c('array', 'camera', 'site')) %>%
+  
+  drop_na()
+```
+
+Final check:
+
+```{r}
+# also, just to confirm: there is covariate data for all sites in the detection data. 
+setdiff(unique(cl_indet$site),
+        unique(cl_covs_wide$site))
+
+# covs were extracted for two extras site that we don't rly care about. CL_11 and CL_64 were not deployed in the pre-cull period.
+# I'm not sure why it's in the coordinate file but it is. Very annoying. 
+setdiff(unique(cl_covs_wide$site),
+        unique(cl_indet$site))
+```
+
+We have covariates for all our detection data which is what matters. The extra covariates do not matter and will be filtered out later when we join our data. 
+
+Save the file:
+
+```{r}
+write_csv(cl_covs_wide, "./data/processed/CL_covariates_grouped_2011-2014.csv")
+```
+                   
+        
+
+

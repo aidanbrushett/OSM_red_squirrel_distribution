@@ -1,0 +1,360 @@
+---
+title: "Merge data and calculate response variables"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+#    highlight: tango
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+------------------------------------------------------------------------
+
+# 0. Before you begin
+
+Aidan Brushett M.Sc. Student University of Victoria\
+School of Environmental Studies\
+Email: [aidanbrushett\@uvic.ca](aidanbrushett@uvic.ca)
+
+------------------------------------------------------------------------
+
+# 1. Set up workspace
+
+## 1.1. Install packages
+
+If you don't already have the following packages installed, use the code below to install them.
+
+```{r install, eval=FALSE}
+list.of.packages <- c("tidyverse", "sf", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+rm(new.packages, list.of.packages)
+```
+
+## 1.2. Load libraries
+
+And a couple custom functions that can help with masking issues from package loading:
+
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list=ls()) # clear environment
+
+library(tidyverse) # data tidying, visualization, and much more; this will load all tidyverse packages, can see complete list using tidyverse_packages()
+library(ggplot2) # pretty plots
+library(sf) # spatial data
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+# 2. Merge the camera operability data
+
+```{r}
+all_operating <- list.files(path="./data/processed/", 
+                               pattern="operating", 
+                               full.names = TRUE) %>%
+  
+    keep(~ !str_detect(.x, "all_arrays")) %>% # only keep the subsets, not the final version which will follow the same naming convention
+  
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(date = col_date(format = '%Y-%m-%d'), 
+                                    site = col_factor(),
+                                    array = col_factor(),
+                                    camera = col_factor()))
+            
+          ) %>%
+  
+      select(-treatment) # present in the Christina lake data
+
+
+str(all_operating)
+```
+
+Check to make sure it's all roughly accounted for:
+
+```{r}
+levels(all_operating$array)
+levels(all_operating$site)
+```
+
+> Sweet jesus is a LOT of sites
+
+# 3. Merge the independent detections data
+
+```{r}
+all_indet <- list.files(path="./data/processed/", 
+                               pattern="independent_detections", 
+                               full.names = TRUE) %>%
+  
+    keep(~ !str_detect(.x, "all_arrays")) %>% # only keep the subsets, not the final version which will follow the same naming convention
+  
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(event_start = col_datetime(format = '%Y-%m-%dT%H:%M:%SZ'), 
+                                    event_end = col_datetime(format = "%Y-%m-%dT%H:%M:%SZ"), 
+                                    site = col_factor(),
+                                    array = col_factor(),
+                                    camera = col_factor(),
+                                    species = col_factor(),
+                                    year = col_integer(),
+                                    month = col_integer())) %>%
+            
+            mutate(species = tolower(species) %>% as.factor())
+          )
+
+str(all_indet)
+```
+
+Check to make sure it's all roughly accounted for:
+
+```{r}
+levels(all_operating$array)
+length(levels(all_operating$site))
+```
+
+Let's also check the species names and correct any that don't match.
+
+```{r}
+levels(all_indet$species)
+```
+
+There are a few things that should be merged together. Let's do that using `recode`:
+
+```{r}
+all_indet <- all_indet %>%
+
+  mutate(species = recode(species, 
+                          'wolf' = 'grey wolf',
+                          'river otter' = 'otter',
+                          'common raven' = 'raven',
+                          'grouse' = 'grouse spp',
+                          'ruffed grouse' = 'grouse spp',
+                          'spruce grouse' = 'grouse spp',
+                          'unknown species' = 'unknown') %>% 
+           droplevels(.))
+
+levels(all_indet$species)
+```
+
+# 4. Merge the covariate files
+
+```{r}
+all_covs <- list.files(path="./data/processed/", 
+                               pattern="covariates", 
+                               full.names = TRUE) %>%
+  
+    keep(~ !str_detect(.x, "all_arrays")) %>% # only keep the subsets, not the final version which will follow the same naming convention
+  
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(site = col_factor(),
+                                    array = col_factor(),
+                                    camera = col_factor(),
+                                    .default = col_number()))
+          ) %>%
+  
+  # There is one duplicate row for WF_85 for some reason, we will remove this here. 
+  distinct()
+
+# We will not look at all covariates since there are about a zillion of them 
+#str(all_covs)
+```
+
+Check to make sure it's all roughly accounted for:
+
+```{r}
+levels(all_operating$array)
+```
+
+# 5. Basic data checks and QAQC:
+
+## 5.1. Consistent site and array names between files? Do we have all data?
+
+Do we have detection data for all operating sites?
+
+```{r}
+# arrays in detection data that are NOT in operating dates data
+setdiff(all_indet$array, 
+        all_operating$array)
+# arrays in operating dates data that are NOT in detection data
+setdiff(all_operating$array, 
+        all_indet$array)
+
+# sites in detection data that are NOT in operating dates data
+setdiff(all_indet$site, 
+        all_operating$site)
+# sites in operating dates data that are NOT in detection data
+setdiff(all_operating$site, 
+        all_indet$site)
+```
+
+\* Chef's kiss\*
+
+Do we have covariate data for all the operating sites?
+
+```{r}
+setdiff(levels(all_operating$site),
+        levels(all_covs$site))
+
+setdiff(levels(all_covs$site),
+        levels(all_operating$site))
+```
+
+We can see that there are extra covariate data for 6 sites, for which we presumably have no detection or operating data. This is fine, it just means we will not use that covariate data. We have 600 sites so this represents 1% of the possible data at most lol. We will filter out these sites later on in this step so that any shapefiles we export accurately represent the data we are *actually* using.
+
+## 5.2. Do deployment dates make sense for each **array**?
+
+Let's plot the operating days for each array and superimpose our independent detections. Is there anything that doesn't overlap? Extra detection data? Missing dates of operbility?
+
+```{r}
+fig_operability <- all_operating %>%
+  
+  select(array, date) %>%
+  
+  distinct() %>%
+  
+  ggplot(., aes(x = date, y = array)) +
+    
+    geom_tile(height = 0.6, color = 'grey30') +  # Create horizontal tiles
+    
+    geom_point(data = all_indet, aes(x = as.Date(event_start), y = array), color = "red", size = 0.1) +  # Add red dots for event_start
+  
+   # scale_fill_grey() + 
+    #scale_fill_manual(values = sample(colors(), 40)) +  # Change fill color if needed
+    labs(title = "Timeline of Camera Operability",
+         x = "Date",
+         y = "Array") +
+      guides(fill = guide_legend(ncol = 2)) + # Set number of columns in the legend
+      scale_x_date(date_labels = "%Y-%m", date_breaks = "6 months", minor_breaks = NULL) +  # 6-month interval
+  
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate date labels
+          axis.title.y = element_blank())  # Remove y-axis title  # Remove grid lines
+
+fig_operability
+
+ggsave("./figures/all_arrays_detections_operability_range.png", fig_operability, width=10, height = 6)
+```
+
+Let's also export for the OSM arrays only, for the 2023-24 fiscal report:
+
+```{r}
+fig_ops_osm <- all_operating %>%
+  
+  select(array, date) %>%
+  
+  distinct() %>%
+  
+  filter(array %nin% c('WF', 'CL')) %>%
+  
+  ggplot(., aes(x = date, y = array)) +
+    
+    geom_tile(height = 0.6, color = 'grey30') +  # Create horizontal tiles
+  
+   # scale_fill_grey() + 
+    #scale_fill_manual(values = sample(colors(), 40)) +  # Change fill color if needed
+  
+      guides(fill = guide_legend(ncol = 2)) + # Set number of columns in the legend
+  
+    scale_x_date(limits = c(as.Date("2021-04-01"), NA),  # Set start date
+                 date_labels = "%Y-%m", 
+                 date_breaks = "6 months") + 
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate date labels
+    labs(y = "Array", x = NULL)
+
+fig_ops_osm
+
+ggsave("./figures/arrays/osm_operability_range.png", fig_ops_osm, width=6, height = 3.5, dpi = 500)
+```
+
+## 5.4. Remove detections that do not line up with **array** operating dates (COARSE FILTER)
+
+There are none apparent in the data but I'll leave this chunk here in case it comes up in future with the addition of more data.
+
+```{r eval = FALSE}
+# Inspect data
+str(all_detections)
+
+# Correct species names as needed
+all_detections <- all_detections %>% 
+  filter(!(array == "Yellowhead" & year(datetime)>=2015)) # there are two points of data in the yellowhead with weirdly high dates
+```
+
+## 5.5. Do deployment dates make sense for each **site**?
+
+Let's do a more thorough check. This is roughly the same graph as before, but this will let us identify gaps for EACH SITE rather than overall across arrays. We will superimpose the timestamps of the independent detections. This will help identify if a camera is tagged as working, but there is a long gap in the data.
+
+```{r}
+for(i in unique(all_operating$array)) {
+
+  array_operating <- all_operating %>% filter(array == i)
+  array_indet <- all_indet %>% filter(array == i)
+
+  fig_site_operability <- ggplot(array_operating, aes(x = date, y = site)) +
+    geom_tile(height = 0.8, fill = "grey70") +  # Create horizontal tiles
+    geom_tile(data = array_indet, aes(x = as.Date(event_start), y = site), fill = "red", height = 0.3) +  # Add red dots for event_start
+    #scale_fill_grey() + 
+    #scale_fill_manual(values = sample(colors(), 40)) +  # Change fill color if needed
+    labs(title = paste0(i, ": Camera Operability and Data Availability"),
+         x = "Date",
+         y = "Site") +
+      guides(fill = guide_legend(ncol = 2)) + # Set number of columns in the legend
+      scale_x_date(date_labels = "%Y-%m", date_breaks = "4 months", minor_breaks = NULL) +  # 6-month interval
+  
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate date labels
+          axis.title.y = element_blank()) +  # Remove y-axis title  # Remove grid lines
+    theme(
+      panel.grid.major.y = element_blank(),  # Remove horizontal grid lines
+      panel.grid.minor.y = element_blank(),  # Also remove minor horizontal grid lines
+      axis.text.y = element_text(size = 6)  # Adjust y-axis font size (change 10 as needed)
+    )
+  
+  print(fig_site_operability)
+  #ggsave(paste0("./figures/arrays/", i, "_detections_operability_range.png"), fig_site_operability, width=12, height = 15)
+
+  rm(array_operating, array_indet)
+}
+```
+
+These all look pretty good and reasonable. There are no immediately apparent gaps in the data that would suggest missing detection data. There are also no extra detections that fall outside the camera operability range. I feel good about this and I think we should be able to proceed with confidence that our data is correct. Woohoo!
+
+# 6. Save each of the three files.
+
+Before we save the covariate file, let's remove those extra sites we found earlier. This will keep things tidier in any shapefiles we use.
+
+```{r}
+all_covs <- all_covs %>%
+  
+  filter(site %in% all_operating$site)
+```
+
+Write the csv files.
+
+```{r}
+write_csv(all_covs, "./data/processed/all_arrays_covariates_grouped.csv")
+
+write_csv(all_indet, "./data/processed/all_arrays_independent_detections.csv")
+
+write_csv(all_operating, "./data/processed/all_arrays_operating.csv")
+```
+
+We will create a spatial file for our covariates in script 4, when we merge our covariates to our response variables. We do not want to do it yet, because the covariate file includes some sites for which we may discard the data. This will mis-represent the sites *actually* being used in our analysis. The chunk below *could be run* if you wanted to look at all sites, but I don't see a good reason to do so.
+
+```{r, eval = FALSE}
+#all_covs_sf <- st_as_sf(all_covs, coords = c("easting_12n", "northing_12n"), crs = 26912)
+#  
+#st_write(all_covs_sf, dsn = './maps/OSM_mapping.gdb', layer = "all_arrays_locations_covariates", driver = "OpenFileGDB", append = FALSE)
+```

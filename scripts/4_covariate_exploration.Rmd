@@ -1,0 +1,343 @@
+---
+title: "Explore covariates for modeling"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE)
+```
+
+```{css zoom-lib-src, echo = FALSE}
+script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"
+```
+
+```{js zoom-jquery, echo = FALSE}
+ $(document).ready(function() {
+    $('body').prepend('<div class=\"zoomDiv\"><img src=\"\" class=\"zoomImg\"></div>');
+    // onClick function for all plots (img's)
+    $('img:not(.zoomImg)').click(function() {
+      $('.zoomImg').attr('src', $(this).attr('src')).css({width: '100%'});
+      $('.zoomDiv').css({opacity: '1', width: 'auto', border: '1px solid white', borderRadius: '5px', position: 'fixed', top: '50%', left: '50%', marginRight: '-50%', transform: 'translate(-50%, -50%)', boxShadow: '0px 0px 50px #888888', zIndex: '50', overflow: 'auto', maxHeight: '100%'});
+    });
+    // onClick function for zoomImg
+    $('img.zoomImg').click(function() {
+      $('.zoomDiv').css({opacity: '0', width: '0%'}); 
+    });
+  });
+```
+
+------------------------------------------------------------------------
+
+# 0. Before you begin
+
+Aidan Brushett M.Sc. Student University of Victoria\
+School of Environmental Studies\
+Email: [aidanbrushett\@uvic.ca](aidanbrushett@uvic.ca)
+
+------------------------------------------------------------------------
+
+# 1. Set up workspace
+
+## 1.1. Install packages
+
+If you don't already have the following packages installed, use the code below to install them.
+
+```{r install, eval=FALSE}
+list.of.packages <- c("tidyverse", "sf", "ggplot2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+rm(new.packages, list.of.packages)
+```
+
+## 1.2. Load libraries
+
+And a couple custom functions that can help with masking issues from package loading:
+
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list=ls()) # clear environment
+
+library(tidyverse) # data tidying, visualization, and much more; this will load all tidyverse packages, can see complete list using tidyverse_packages()
+library(ggplot2) # pretty plots
+library(sf) # spatial data
+library(PerformanceAnalytics)
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+# 2. Import data
+
+Import the covariates. We will join these to the proportional response variable now.
+
+```{r}
+covs <- read_csv("./data/processed/all_arrays_covariates_grouped.csv",
+                 col_types = cols(array = col_character(),
+                                  site = col_character(),
+                                  .default = col_number())) %>%
+  select(-camera)
+```
+
+Let's read in the response variable that we'd like to model. We'll start with monthly proportional presence-absence and append the covariate data. All this step accomplishes is left joining the covariates to the data so that we only consider sites that we are *actually* using in our analysis.
+
+We will not need to re-do our covariate exploration for different response variables, since 1) the weekly metrics use the exact same set of sites, and 2) we have no temporally varying covariates. A daily, weekly, hourly, etc. response variable may change the selection of sites that we use, but we can cross that bridge if it comes to it.
+
+```{r}
+data <- read_csv("./data/processed/all_arrays_proportional_presence_monthly_clean.csv",
+                 col_types = cols(array = col_character(),
+                                  site = col_character(),
+                                  .default = col_number())) %>%
+  
+  left_join(covs, by = c('site', 'array'))
+
+# Check to make sure there is only one row per site. We do NOT want duplicates, if there are any it is likely due to the covariate file glitching out and you will want to go back and fix this in the previous scripts or re-extract the covs.  
+data %>% group_by(site) %>%
+  
+  summarize(n = n()) %>%
+  
+  arrange(desc(n))
+```
+
+# 3. Create landscape-scale covariates
+
+For now, we will create three covariates at the landscape scale that could plausibly mediate site-level relationships between snowshoe hares and habitat patches. These are:
+
+-   Mean proportional presence of coyotes
+-   Mean proportional presence of lynx
+-   Mean disturbance from *all* human features
+
+We can conveniently accomplish this with our current dataframe. For other response variables (monthly, weekly PA) or other ways of measuring coyote and lynx presence (e.g. independent detections) this might require different steps. We will also want to eventually extract NDVI, but this has yet to be completed. *Note: combining the human footprint steps would be a bit easier if this data was still in long format. Since they've been grouped this way, we'll do this for now. In future this could be calculated in scripts 1a, 1b, and 1c.*
+
+```{r}
+# Buffer sizes in the dataset
+buffers <- seq(from=250, to=5000, by=250)
+
+# Define the human feature keywords for the variables we want to combine
+human_features <- c("osm_industrial", "harvest", "pipeline", "roads", 
+                    "seismic_lines", "wells", "seismic_lines_3D", "trails", 
+                    "transmission_lines")
+
+# Loop through each buffer size. Sum the columns for each buffer and assign to a new column
+for(buffer in buffers){
+  
+  cols <- paste0(human_features, "_", buffer)
+  
+  human_footprint <- rowSums(select(data, matches(cols)))
+  
+  data[[paste0("human_footprint_", buffer)]] <- human_footprint
+}
+
+# Clean up the helpers from the loop
+rm(buffer, human_footprint, human_features, cols)
+
+landscape_covs <- data %>%
+  
+  mutate(coyote_abundance = coyote / months_active,
+         lynx_abundance = lynx / months_active) %>%
+  
+  group_by(array) %>%
+  
+  summarize(coyote_landscape = mean(coyote_abundance),
+            lynx_landscape = mean(lynx_abundance),
+            across(starts_with("human_footprint_"), mean, na.rm = TRUE), .groups = "drop") %>%
+  
+  rename_with(~ gsub("human_footprint_", "hf_landscape_", .))
+
+```
+
+Now let's merge the landscape covariates onto our big ol' dataframe for model fitting. 
+
+```{r}
+data <- data %>%
+  
+  left_join(landscape_covs, 
+            by = 'array')
+```
+
+# 4. Export final dataframes.
+
+## 4.1. Site shapefile with covariates
+
+This is the first spot in our workflow where it feels reasonable to export the shapefile of sites, since we now have a beautifully merged dataframe of our camera sites AND their covariates, with no extra sites for which we have no data (or sites we are discarding for our analysis). We'll save it to our geodatabase.
+
+```{r}
+all_sites_sf <- st_as_sf(data, 
+                        coords = c("easting_12n", "northing_12n"), 
+                        crs = 26912)
+  
+st_write(all_sites_sf,
+         dsn = './maps/OSM_mapping.gdb', 
+         layer = "all_arrays_locations_covariates", 
+         driver = "OpenFileGDB", append = FALSE)
+
+rm(all_sites_sf)
+```
+
+## 4.2. Dataframe with covariates
+
+```{r}
+write_csv(data, "./data/processed/all_arrays_proportional_presence_monthly_with_covariates.csv")
+```
+
+# 5. Covariate exploration
+
+Let's explore our covariate data. We will use the monthly proportional detection dataset to do this, but it doesn't really matter.
+
+First, we'll generate some basic historgrams of my potential explanatory variables and determine which are useful/actually have variation. For now, we'll just start with the 250 meter radius to keep things simple.
+
+## 5.1. Histograms at 250 m
+
+```{r}
+# using purr solution
+data %>% 
+  
+  select(ends_with('_250')) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+```
+
+> At 250 meters, it doesn't look like we have much meaningful variation in:
+>
+> -   Water (*lc_water_250*)
+> -   Transmission lines (*transmission_lines_250*)
+> -   Trails (*trails_250*)
+>
+> And some, but not a ton of, variation for:
+>
+> -   3D seismic lines (*seismic_lines_3D_250*)
+> -   Industrial sites (*osm_industrial_250*)
+
+## 5.2. Histograms at 1000 m
+
+Let's repeat the exercise at 1000 m to give us a sense of how this might change with increasing scale:
+
+```{r}
+# using purr solution
+data %>% 
+  
+  select(contains('_1000')) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+```
+
+> At 1000 meters, it doesn't look like we have much meaningful variation in:
+>
+> -   Vegetated edges (*veg_edges_1000*)
+> -   Transmission lines (*transmission_lines_1000*)
+>
+> And some, but not a ton of, variation for:
+>
+> -   3D seismic lines (*seismic_lines_3D_1000*)
+> -   Water (*lc_water_1000*)
+> -   Industrial sites (*osm_industrial_1000*)
+
+## 5.3. Histograms at 5000 m
+
+Let's repeat the exercise at 5000 m to give us a sense of how this might change with increasing scale:
+
+```{r}
+# using purr solution
+data %>% 
+
+  select(contains('_5000')) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+```
+
+> At 5000 meters, we get some, but not a ton of, variation for:
+>
+> -   3D seismic lines (*seismic_lines_3D_5000*)
+> -   Industrial sites (*osm_industrial_5000*)
+
+## 5.4. Histograms of predators
+
+```{r}
+# using purr solution
+data %>% 
+
+  select(lynx_landscape, coyote_landscape) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+```
+
+
+So it looks like the main variables of interest that have low variation are industrial sites, 3D seismic lines, and water. Vegetated edges and transmission lines might be useful but given how specific they are they might be best off getting lumped into a single category of 'cleared features', if we even decide that we want to use them. Vegetated road edges obviously correspond with roads so we could consider pooling these into the road class if we deem this an appropriate representation of roads. Importantly, depending on how our modeling goes it could be worthwhile to pool low-impact (3D) and conventional seismic lines into a single 'seismic line' class across spatial scales.
+
+## 5.5. Correlation at allspatial scales
+
+Now let's look at whether there is correlation among any of our explanatory variables. We'll use the handy `chart.Correlation()` function from the `PerformanceAnalytics` package to do this.
+
+```{r}
+for(buffer in buffers){
+  
+  data %>%
+      
+    select(ends_with(paste0('_', buffer))) %>%
+    
+    # Let's not plot this since it's correlated with roads >0.70 at almost all scales. 
+    #select(-contains('veg_edges')) %>%
+    
+    # Removing the buffer name helps legibility since we're cramming a lot of data into these charts
+    set_names(names(.) %>% 
+                str_replace(pattern = paste0('_', buffer), replacement = '')) %>%
+    
+    PerformanceAnalytics::chart.Correlation(., 
+                                            histogram = TRUE, 
+                                            method = "pearson",
+                                            main = paste('correlation at:', buffer, 'm')
+                                            )
+}
+```
+
+> Main takeaways:
+>
+> -   ***Veg_edges*** correlates with *roads* (\~ 0.50 to 0.80) at all spatial scales. It is not majorly correlated with anything else.
+> -   ***OSM_industrial*** correlates with *roads* (\~ 0.60 to 0.80) at all spatial scales, and the correlation [exceeds 0.70]{.underline} at spatial scales \>= 1500 m.
+> -   ***lc_deciduous*** and ***lc_broadleaf*** landcover are negatively correlated (-0.67) at all spatial scales, but this makes sense since they're mutually exclusive proportions originating from the same dataset.
+> -   ***Pipelines*** and ***transmission_lines*** are moderately correlated (\~ 0.50 to 0.60) at all spatial scales except 250 m.
+> -   ***wells*** and ***roads*** correlate moderately (\~ 0.5) starting at 1250 m, and the correlation [exceeds 0.70]{.underline} at spatial scales \>= 3000 m.
+> -   ***wells** and **pipelines*** gradually increase in correlation from very low to 0.71, and the correlation [exceeds 0.70]{.underline} at spatial scales \>= 4500 m.
+> -   ***pipelines*** and ***roads*** are moderately correlated at most spatial scales other than 250 m. The correlation increases gradually to a maximum of 0.65.
+> -   None of the natural landcover variables have a concerning correlation.
+> -   ***hf_landscape*** (cumulative disturbance) is moderately correlated (\~0.45) with harvest and with cumulative site-level disturbance ***human_footprint*** (\~ 0.3 to 0.63, maximum at 5000 m), but that's about it.
+
+Hooray!! With this information in mind, we should be able to start fitting our models now :)

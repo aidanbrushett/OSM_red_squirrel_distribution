@@ -1,0 +1,594 @@
+---
+title: "Assignment 4"
+author: "Aidan Brushett"
+date: '2025-02-13'
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+
+*****
+
+# Before you begin
+
+## Download data
+
+Make sure you have the [Bear glm example raw data (pagube_2008_2016_spatial.csv)](data/raw/pagube_2008_2016_spatial.csv) downloaded to the data/raw folder.  
+
+```{css echo = FALSE}
+blockquote{
+background-color: rgb(255,255,213);
+}
+```
+
+```{r setup, include=TRUE, warning=FALSE, message=FALSE}
+rm(list = ls())
+
+knitr::opts_chunk$set(eval = TRUE)
+
+library(PerformanceAnalytics) # for generating correlation plots
+library(lme4) # fitting glms
+library(MuMIn) # model selection
+library(car)
+library(AER) # testing for dispersion w/ poisson distribution
+library(broom)
+library(pROC) # calculating area under the curve
+library(ResourceSelection) # Package with function to test dispersion for 
+library(ggeffects) # getting model predictions in tibble format for plotting
+library(tidyverse) # for data cleaning and tidying operations
+
+select <- dplyr::select
+
+```
+
+
+*****
+
+# 1 Data import
+
+* First read in the data as a tibble and save it to the environment with a descriptive and tidy name of your choice   
+* In the same code chunk as you read the data in, set the column names to lowercase   
+* Also in that code chunk, specify how the variables should be read in (e.g. factor, numeric, etc.)   
+
+```{r}
+bear_damage <- read_csv('data/raw/pagube_2008_2016_spatial.csv', # import data
+                        # define column classes
+                        col_types = cols(Damage = col_factor(),
+                                         Year = col_factor(),
+                                         Month = col_factor(),
+                                         Targetspp = col_factor(),
+                                         Landcover_code = col_factor(),
+                                         .default = col_number())) %>% 
+  # set names to lowercase
+  rename_with(tolower)
+```
+
+* Explore the data and make sure things read in properly, make any changes if necessary   
+
+```{r}
+str(bear_damage)
+
+names(bear_damage)
+```
+
+*****
+
+# 2 Data cleaning
+
+This data has already been cleaned and checked for errors, but to give you some practice with data checking and cleaning I will have you complete the following steps:  
+
+* Check that there isn't any data for years outside the study specifications, if there are remove those observations  
+* Check that all entries appear coded correctly for month, if any are not remove those observations (0s are okay as these are associated with pseudo-absences)
+
+```{r}
+# a visual inspection should be good enough
+summary(bear_damage)
+```
+> All years fall within the range of 2008-2016! All months are within 0 to 12, and it looks like 0s are supposed to be there in this dataset? So can continue:
+
+* create a new variable (with an informative and tidy name of your choice) that sums all the proportional habitat type observations (e.g. prop_arable - prop_for_regen) and check that they all sum to 100, *if they don't filter out the observations that don't sum to 100 and assign this data as a new object to the environment with an informative and tidy name of your choice*    
+* also ensure that this new data set is filtered to only observations where 10 or fewer livestock were killed in an event
+
+```{r}
+bear_damage_clean <- bear_damage %>%
+  
+  mutate(proportion_sum = rowSums(across(contains('prop')))) %>% # sum all of the rows that start with "proportion"
+  
+  filter(proportion_sum == 100, # Many entries sum to 99 or similar, so I think this is a way too conservative filter. For purposes of assignment, continuing this way. 
+         livestock_killed <= 10) %>% # remove when livestock killed exceeds 10
+
+  select(-proportion_sum) # remove the helper column
+```
+
+* ensure ALL original and new columns are present in this new data set 
+
+```{r}
+# Names in clean data but not in original
+setdiff(names(bear_damage_clean),
+        names(bear_damage))
+
+# Names in original data but not in the clean dataset
+setdiff(names(bear_damage),
+        names(bear_damage_clean))
+```
+
+> Looks good, one extra proportion_sum column that we don't care about. 
+
+* when you are done, remove the old data set from the environment, you will use this new cleaned one for future analyses  
+
+```{r}
+rm(bear_damage)
+```
+
+*****
+
+# 3 Summary statistics
+
+Using your new data set, please calculate some summary statistics to report
+
+* Total number of events AND total number of livestock killed by brown bears across the entire study  
+
+```{r}
+bear_damage_clean %>%
+  
+  # Want to look at POSITIVE cases only. Where damage occurred due to bears. 
+  filter(damage == 1) %>%
+  
+  summarize(
+    total_events = n(),
+    total_livestock_killed = sum(livestock_killed)
+  )
+```
+> 470 animals killed over 198 separate events. 
+
+* Total number of events of your response variable per livestock type, year, and month *provide comments that highlight which type, year, and month had the most and least number of events*  
+
+```{r}
+bear_damage_clean %>%
+  
+  # Want to look at POSITIVE cases only. Where damage occurred due to bears. 
+  filter(damage == 1) %>%
+  
+  # group by species. Code chunks below identical except for grouping variable
+  group_by(targetspp) %>%
+  
+  # Two summary stats
+  summarize(
+    total_events = n(),
+    total_livestock_killed = sum(livestock_killed)
+  ) %>%
+  
+  # Most events to least
+  arrange(desc(total_events))
+
+```
+
+> Most bovine events (143 total events)
+
+```{r}
+bear_damage_clean %>%
+  
+  filter(damage == 1) %>%
+  
+  group_by(month) %>%
+  
+  summarize(
+    total_events = n(),
+    total_livestock_killed = sum(livestock_killed)
+  ) %>%
+  
+  arrange(desc(total_events))
+
+```
+
+> Most events in September (42 total events)
+
+```{r}
+bear_damage_clean %>%
+  
+  filter(damage == 1) %>%
+  
+  group_by(year) %>%
+  
+  # summary for two fields 
+  summarize(
+    total_events = n(),
+    total_livestock_killed = sum(livestock_killed)
+  ) %>%
+  
+  # most events to least
+  arrange(desc(total_events))
+
+```
+
+> Most events in 2012 (coincidentally also 42 total events)
+
+* Number of events of your response variable per livestock type for each year *provide comments that highlight which year had the most and least number of events for each livestock type* 
+
+```{r, message=FALSE}
+# damage per livestock type per year
+bear_damage_clean %>% 
+  
+  # ensure to only count events of damage
+  filter(damage == '1') %>% 
+  
+  # group by targetspp to get summaries for each species and year
+  group_by(targetspp, year) %>% 
+  
+  # summary for two fields 
+  summarize(
+    total_events = n(),
+    total_livestock_killed = sum(livestock_killed)
+  ) %>%
+  
+  # most events to least
+  arrange(desc(total_events))
+```
+
+> Most 'bovine' events in 2012 (31 events). // least in 2009 (6 total events)
+> Most 'ovine' events in 2016 (8 total) // least in 2010 and 2015 (2 events)
+> Most 'alte' in 2014 and 2012 together (4 events) // least in 2009, 2013, 2015, 2016 (1 event)
+> *NOTE* that summarize often drops cases where the sum would be 0 or NA. So these are missing from this summary.
+
+# 4 Identify the response variable
+
+Once your data are cleaned and formatted please identify the response variable for your models *(There are two possible response variables)* 
+
+AND the appropriate distribution for your data *You'll need to provide some kind of code to show you looked at the response variable to choose the distribution* 
+
+```{r}
+# Check out distribution of damage
+plot(bear_damage_clean$damage,
+     xlab = "Brown bear damage",
+     ylab = "No. occurrences")
+```
+
+> I will use the `damage` variable as response since it is a binary indicator for presence/absence of livestock damage caused by brown bears (0 = no damage 1 = damage). It follows a bernoulli distribution. 
+
+
+*****
+
+
+# 5 Data exploration
+
+Then complete the data exploration steps below
+
+* Generate plots of your potential explanatory variables and determine which are useful (provide annotation of why some are not useful) 
+
+```{r}
+# using purr solution that was presented in the module in lab
+bear_damage_clean %>% 
+  
+  dplyr::select(bear_abund, altitude:prop_for_regen) %>%
+
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+
+
+## And a couple factors we could use that don't fit in the purrr code
+plot(bear_damage_clean$landcover_code,
+     main = "landcover_code")
+
+plot(bear_damage_clean$targetspp,
+     main = 'target_spp')
+```
+
+> there's no variation in `prop_orchards`. Can discard. Also not much variation in `dist_to_forest`, `human_population`, `prop_ag_mosaic`. We definitely won't use human population or prop_orchards, but the others could still be borderline, TBD. 
+
+* From the selected candidate explanatory variables check for multicolinearity between variables and make note of which variables are highly correlated and the r2 value.  
+
+```{r}
+bear_damage_clean %>%
+  
+  select_if(is.numeric) %>% # numeric covariates only, not factors
+  
+  select(-prop_orchards, -human_population) %>% # de-select covs with not much variation. Glitch during knitting so put it in any_of
+
+  # make the chart
+  PerformanceAnalytics::chart.Correlation(., 
+                  histogram = TRUE, 
+                  method = "pearson")
+```
+
+> This only works for numeric values. 
+> nothing is correlated with coordinates which is good. Also doesn't really matter since we aren't running spatially-explicit models
+
+> * `distance_to_town` and `altitude` are correlated moderately (0.56), but since this is under 0.7 I'll leave it for now
+> * `prop_arable` and `dist_to_forest` are highly correlated (0.82). We will remove `dist_to_forest` if prop_arable is in models since it didn't have much variation anyway (see histograms)
+> * `altitude` and `prop_coniferous` are correlated as well (0.68) which makes sense ecologically. This is borderline so I'll leave it for now. 
+
+
+# 6 Data formatting
+
+Please add ONE additional variable (column) that is based on one or more of the variables already in the data. This must be an ecologically relevant variable, for example human_population divided by dist_to_town is not an ecologically relevant variable, but the binary hunting variable from the cows data where years prior to hunting ban were coded as '1' and years after hunting ban '0' is an ecologically relevant variable generated from the existing data. *You cannot use the hunting example as your variable, there are several possibilities here; you may want to use the information from your data exploration to inform this decision* 
+
+> For brown bears I don't reckon forest type is as important as it is for other species like ungulates, so I'll lump forest together 
+
+```{r}
+
+bear_damage_clean <-  bear_damage_clean %>% 
+  
+  # add new column that groups all forest types 
+  mutate(prop_forest = 
+           prop_coniferous + 
+           prop_deciduous + 
+           prop_mixedforest)
+
+```
+
+# 7 Fit some models
+
+Create a candidate set of 8-10 models that represent hypotheses about what variables may explain your chosen response and fit these to a glm with the appropriate distribution
+
+* Scale all numeric explanatory variables in your models  
+* One model must be a null model  
+* One model must include an interaction term AND have an appropriate analog model without an interaction term to compare the relevance of the interaction  
+* No global models (all non-correlated variables in one model)  
+
+**Ensure these don't include correlated variables and are not overparameterized**. Check that these models are fitting appropriately before proceeding to question 7
+
+Scale all the variables:
+
+```{r}
+# Scale all numeric predictor variables
+bear_damage_scale <- bear_damage_clean %>%
+  mutate(across(where(is.numeric), ~ as.numeric(scale(.))))
+```
+
+> I would probably put more thought into meaningful and sub-settable or additive models for a real modeling project. For the purposes of the assignment, I think these models are based on 'good enough' hypotheses that are reasonable and testable. I'm keeping them simple for the assignment. 
+
+> I have lots of cases of damage >100, so number of parameters is not a big concern. I also am not concerned about correlated variables since I am making a point of excluding them below:
+
+```{r}
+# Null
+m_null <- glm(damage ~ 1, 
+              data = bear_damage_scale,
+              family = 'binomial')
+
+# Damage depends on local bear density
+m_abundance <- glm(damage ~ bear_abund, 
+                   data = bear_damage_scale,
+                   family = 'binomial')
+
+# Damage depends human influence (distance to towns)
+m_human <- glm(damage ~ dist_to_town, 
+                 data = bear_damage_scale,
+                 family = binomial)
+
+# Damage depends on bear abundance AND distance to town
+m_abundance_add <- glm(damage ~ bear_abund + dist_to_town,
+                       data = bear_damage_scale,
+                       family = 'binomial')
+
+# The effect of bear density depends on the density of people (avoidance/fear?) 
+m_abundance_int <- glm(damage ~ bear_abund*dist_to_town,
+                       data = bear_damage_scale,
+                       family = 'binomial')
+
+# Damage depends on the proportion of forest cover surrounding the site
+m_forest <- glm(damage ~ prop_forest, 
+                data = bear_damage_scale,
+                  family = binomial)
+
+# Damage depends on the proportion of forest cover surrounding the site AND bear density
+m_forest_abundance <- glm(damage ~ prop_forest + bear_abund, 
+                          data = bear_damage_scale,
+                          family = binomial)
+
+# Damage depends on the proportion of forest cover surrounding the site AND bear density AND distance to towns
+m_forest_abundance_human <- glm(damage ~ prop_forest + bear_abund + dist_to_town, 
+                                data = bear_damage_scale,
+                                family = binomial)
+```
+
+> Store all models in my global environment in a list using mget :)
+
+```{r}
+# All models in a list because I'm lazy and don't want to re-write a ton of code
+models <- mget(ls(pattern="m_"))
+```
+
+> Let's look at a summary of each model and make sure they fit properly. We will only check assumptions for the top model here, but it could be done using `map` for all of them in basically the same amount of code.
+
+```{r}
+# Use purrr to print all summaries. Officially breaking up with for loops now :))
+map(models, 
+    ~summary(.x))
+```
+
+> Looks reasonable for all models. 
+
+
+# 8 Model selection
+
+Perform model selection on your candidate set of models and identify the best fit model/s:
+
+```{r}
+# Create and look at the AIC table
+MuMIn::model.sel(models)
+```
+
+> The `m_forest_abundance_human` model is the top model! Let's use that moving forward to check assumptions. 
+
+```{r}
+top_model <- m_forest_abundance_human
+```
+
+
+# 9 Check model assumptions
+
+This section will vary depending on the response variable you chose, variables you included in your models, etc. So I'm not specifying particular code to run, re-visit the GLM lab and other stats resources if needed to ensure you've answered the following question adequately with both code and a written response
+
+* Check if your model violates any assumptions  
+* For each assumption have a brief annotation explaining what you're testing and the conclusion you've drawn  
+
+If your model appears to violate any assumptions you don't need to re-run it, just proceed  
+
+## 9.1. Multi-colinearity. Let's look at the variance inflation factors of the top model graphically. I'm looking to make sure VIF < 5 (at the absolute max) for all variables.
+
+```{r}
+# vif from the car package
+car::vif(top_model) %>% 
+  
+  # Converts the named vector returned by vif() into a tidy tibble
+  enframe(name = 'Predictor', 
+          value = 'VIF') %>%
+  
+  # plot with ggplot
+  ggplot(aes(x = reorder(Predictor, VIF), # reorders from smallest VIF to largest (not sure I want like this)
+             y = VIF)) +
+  
+  # plot as bars
+  geom_bar(stat = 'identity', fill = 'skyblue') +
+  
+  # add labels
+  labs(x = 'Predictor',
+       y = 'VIF') +
+  
+  # set theme
+  theme_bw()
+```
+
+> All VIFs are around 1, lower than 1.25 for all terms :) This assumption is met. 
+
+## 9.2. Dispersion of data:
+
+Calculate chi square approx. for residual deviance
+
+```{r}
+top_model$deviance / top_model$df.residual
+```
+
+> My data is slightly underdispersed but I think this is alright. It's less a worry than overdispersion. It probably just means we'll have more conservative confidence intervals. This 'assumption' is met and we can move on. 
+
+## 9.3. Homogeneity of variance
+
+> This is not a worry for my top model, since I have no categorical variables. 
+
+## 9.4. Normality of residuals and influential observations. 
+
+Now let's look at the diagnostic plots. 
+
+```{r}
+plot(top_model)
+```
+
+> Normal distribution of residuals: very obviously not (looks like sh**) but it's fine since this is an unimportant assumption for our logistic regression and all other assumptions look pretty good. 
+
+> Influential observations: there are a few labeled points with high residuals that could be outliers, but they have relatively low leverage so they're likely not pulling the regression line too much. Not any points in the top right (high leverage, high Pearson resid) so we're good to go on these and I don't think there are any outliers that need investigation. 
+
+
+*From the GLM seminar:*
+
+* *The Residuals vs Fitted plot can help you see, for example, if there are curvilinear trends that you missed. But the fit of a logistic regression is curvilinear by nature, so you can have odd looking trends in the residuals with nothing amiss.*
+* *The Normal Q-Q plot helps you detect if your residuals are normally distributed. But the deviance residuals don’t have to be normally distributed for the model to be valid, so the normality / non-normality of the residuals doesn’t necessarily tell you anything.*
+* *The Scale-Location plot can help you identify heteroscedasticity. But logistic regression models are pretty much heteroscedastic by nature.*
+* *The Residuals vs Leverage can help you identify possible outliers. But outliers in logistic regression don’t necessarily manifest in the same way as in linear regression, so this plot may or may not be helpful in identifying them*
+
+> **OVERALL**: I would say that my assumptions of this model have been met reasonably well enough to proceed with interpretation and not require additional investigation. 
+
+
+# 10 Interpret results
+
+In bullet-point format provide annotations (comments) AND code (where necessary) that answer the following questions
+
+* Do you have a singular best-fit model and why or why not?
+
+> Yes. Model separation was quite high (> 10 AIC units) between my top and second-to-top model. It had 99% of all model weight in my candidate set. 
+
+```{r}
+MuMIn::model.sel(models)
+```
+
+* Was the interaction term useful?  How do you know?  
+
+> No, it was not useful. The additive model (`~ dist_to_town + bear_abundance`) came out on top compared to the interaction, but only slightly (approx. deltaAIC of 1.7). The interaction didn't meaningfully improve model fit compared to this additive model. At any rate, neither had much model weight in my candidate set. In future I would consider revising the candidate model set to include `prop_forest` in the interaction model since it came up -- just part of the inquiry process and I am too busy this week to go back and make a better model set lol.
+
+For your best-fit model (if you don't have an obvious singular model pick one of the competitive models) and answer the questions below for that model:    
+
+* What variable/s best explain the variation in your response? How do you know?   
+
+> We can look at the standardized coefficeints here:
+
+```{r}
+summary(top_model)
+```
+
+If we calculate odds ratios for the scaled coefficients we can now compare the magnitude of effect for different variables even though the original units of measurement were different.
+
+> We can also reconvert the standardized coefficients to odds ratios:
+
+```{r}
+exp(coefficients(top_model))
+```
+
+>  Bear abundance `bear_abund` has the largest effect size, so I suppose this could be considered the 'best' variable to explain variation in the damage events response. It also has a reasonably low standard error. For each increase of 1 standard deviation in bear data, we see a 51.6 % increase in the odds of damage (NOT probability, odds is a different thing).  We can plot the marginal effects below. Also the distance to town thing is quite an interesting result, I would have expected a positive effect. 
+
+**We can also plot the marginal effect here just for funsies using the code from seminar:**
+```{r, message=FALSE}
+# ggpredict is great
+ggeffects::ggpredict(top_model,
+                       terms = 'bear_abund') %>%
+
+# create graph with predicted prob x bear abundance
+ggplot(data = ., 
+       aes(x = x, 
+           y = predicted)) +
+  
+  # add line for predicted prob
+  geom_line() +
+  
+  # add error bar
+  geom_ribbon(aes(ymin = conf.low,
+                  ymax = conf.high),
+              alpha = 0.5) + # changes opacity so you can see the main line
+  
+  labs(x = "bear abundance",
+       y = "probability of damage")
+
+```
+
+* Is this model a good fit to the data? How do you know?  
+
+**I've already looked at the plots above and they all seem reasonable. We can also look at the AUC.**
+
+```{r, message=FALSE}
+# Create the curve using the pROC package
+c.roccurve <- pROC::roc(bear_damage_scale$damage, 
+                  predict(top_model, type = 'response'))
+
+# calculate AUC
+pROC::auc(c.roccurve)
+```
+
+```{r}
+# plot it!
+plot.roc(c.roccurve, main="Area Under the Curve for best model")
+```
+
+**We can also calculate the pseudo R squared from the top model:**
+
+```{r}
+# pseudo R2 using deviance values from the model
+1 - top_model$deviance / top_model$null.deviance
+```
+
+> The pseudo R squared is terrible lol. The AUC is also quite low (poor discrimination between damage=1 and damage=0). It's better than random but barely. Same with the pseudo R2, which is low but this is common in ecology. It doesn't mean that its not valuable ecologically, but I wouldn't rely on it for good predictions. It's also 
+
+# 11 Caveats
+
+In bullet-point format provide annotations (comments) that speak to possible factors of the data, modeling approach, etc. which could contribute to uncertainty with your model selection, fit, and how you could improve this analysis
+
+* in the original correlation plot, there was some correlation between x and y coordinates suggesting there's some spatial structure to the data. Perhaps samples were taken along a geographic gradient following a mountain range, etc. (it would probably be a rough diagonal if I were to plot sampling sites). If the spatial structure also corresponds to some sort of environmental gradient that goes unmeasured by my models, that could affect model results or need specification. 
+* Distance to town and other 'distance to' variables can lose meaning past a certain distance. For example, a bear probably doesn't care if a city is 100 or 1000 km away. I have applied a decay term to my 'distance' variables in past models to account for the diminishing effect of distance. GAMs could also help :)
+* A more complex candidate model set created using careful ecological consideration and *a priori* knowledge of the study area/better hypotheses would probably be better. My candidate model set is relatively basic and the top model is only **relative** to the others, as we can see it still kind of sucks and could probably include more terms.
+* I also did not consider whether there were seasonal effects that we didn't account for. If sampling was skewed by season it could be an issue. Bears also hibernate, I don't know if this is the case in romania -- for future discussion. 

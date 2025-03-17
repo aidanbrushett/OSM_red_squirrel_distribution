@@ -1,0 +1,128 @@
+---
+title: "Ch. 1. Explore covariates"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+# 0. Before you begin
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+***
+
+# 1. Setup
+
+```{r}
+rm(list=ls()) # start fresh :)
+
+library(tidyverse)
+library(ggplot2)
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+
+```
+
+
+# 2. Import the Richardson covariate data
+
+```{r import covariate data}
+
+# these data files have a similar format so we will read them in together using the map() function in the purrr package
+
+covariate_data <-    
+  # provide file path (e.g. folders to find the data)
+  file.path('data/raw/',
+            
+            # provide the file names
+            c('Richardson_HFI_2018_20250209.csv',
+              'Richardson_VEG_2010_20250209.csv')) %>%
+  
+  # use purrr map to read in files, the ~.x is a placeholder that refers to the object before the last pipe (aka the list of data we are reading in) so all functions inside the map() after ~.x will be performed on all the objects in the list we provided
+  map(~.x %>%
+        read_csv(.,
+                 
+                 # specify how to read in the various columns
+                 col_types = cols(Site = col_factor(),
+                                  BUFF_DIST = col_integer(),
+                                  .default = col_number())) %>%
+        
+        
+        
+        # set the column names to lower case
+        set_names(
+          names(.) %>% 
+            tolower()) %>% 
+        
+        mutate(site = gsub("-", "_", site) %>% # First, replace any hyphens with underscores
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                  as.factor(.)) 
+  ) %>%
+           
+  # set the names of the two files in the list, if you don't run this they will be named numerically (e.g. [1], [2]) which can get confusing
+  purrr::set_names('HFI',
+                   'VEG')
+
+# will get a warning about parsing issues, don't panic it is fine
+
+```
+
+Even though we set some of the columns to read in as a specific type in the data import step it's always a good idea to check internal structure. 
+
+```{r}
+str(covariate_data)
+```
+
+Now let's check that all the sites are accounted for, there should be 199 just like with the timelapse data
+
+```{r covariates site names}
+
+# check that the sites are all there and entered correctly, there should be 155
+
+# since the data sets are in a list we need to call the list first, then the data name in the list, then the column name
+levels(covariate_data$HFI$site)
+levels(covariate_data$VEG$site)
+```
+
+
+
+
+
+
+
+
+
+# 2. Import OSM covariates and data
+
+```{r}
+
+covariates <- read_csv("./data/raw/OSM_covariates_grouped_2021_2022_2023.csv",
+                       col_types = cols(site = col_factor(), 
+                                        array = col_factor(), 
+                                        buff_dist = col_factor(), 
+                                        .default = col_number())
+                       )
+
+presence <- read_csv("./data/processed/OSM_")
+
+```
+
