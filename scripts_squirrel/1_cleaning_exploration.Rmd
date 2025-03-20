@@ -41,8 +41,6 @@ summary(covs)
 
 2. Merge the response and covariates
 ```{r}
-squirrel <- dets %>%
-  left_join(covs, by = "site")
 
 # difference in row #s so I will check the site numbers 
 length(unique(dets$site))
@@ -55,33 +53,101 @@ length(unique(covs$site))
 ## Data exploration 
 
 # 1. Test for multicollinearity
-```{r}
-squirrel_cor <- squirrel %>%
-  select(lc_broadleaf, 
-         lc_coniferous, 
-         lc_mixed, wells, 
-         veg_edges, 
-         harvest, 
-         pipeline, 
-         trails,
-         roads, 
-         seismic_lines,
-         seismic_lines_3D, 
-         transmission_lines)
+```{r subset data}
 
-chart.Correlation(squirrel_cor, 
-                  histogram = TRUE, 
-                  method = "spearman")
+buffer_frames <- list()
 
-# broadleaf and conifer -0.72
-# veg edge and roads 0.86
-# pipeline and trans line 0.59
-# roads and wells 0.57
-# wells and pipeline 0.58
-# pipeline and roads 0.6
-# wells and 3D seismic
+for (i in unique(covs$buff_dist)){
+  
+  print(i)
+  
+  # Subset data based on radius
+  df <- covs %>%
+    filter(buff_dist == i)
+  
+  # list of dataframes
+  buffer_frames <-c (buffer_frames, list(df))
+}
+
+# name list objects so we can extract names for plotting 
+
+buffer_frames <- buffer_frames %>% 
+  
+  # absurdly long way to do this but for sake of time fuck it
+  purrr::set_names('250 meter buffer',
+                   '500 meter buffer',
+                   '750 meter buffer',
+                   '1000 meter buffer',
+                   '1250 meter buffer',
+                   '1500 meter buffer',
+                   '1750 meter buffer',
+                   '2000 meter buffer',
+                   '2250 meter buffer',
+                   '2500 meter buffer',
+                   '2750 meter buffer',
+                   '3000 meter buffer',
+                   '3250 meter buffer',
+                   '3500 meter buffer',
+                   '3750 meter buffer',
+                   '4000 meter buffer',
+                   '4250 meter buffer',
+                   '4500 meter buffer',
+                   '4750 meter buffer',
+                   '5000 meter buffer')
 
 ```
+
+
+```{r response metric}
+
+squirrel <- buffer_frames %>% 
+  
+  purrr::map(
+    ~.x %>% 
+      
+      left_join(dets,
+                by = 'site'))
+```
+
+
+```{r correlation at all buffer sizes}
+
+squirrel %>% 
+  
+  purrr::map(
+    ~.x %>% 
+      
+      # select only columns with covaraites not other info
+      select(harvest:osm_industrial) %>% 
+      
+      # use chart.correlation 
+      chart.Correlation(.,
+                        histogram = TRUE, 
+                        method = "pearson")
+  )
+
+```
+
+250m - roads and veg edges 0.71
+500m - roads and veg edges 0.71
+750m - pipeline + trans 0.63, roads + veg edges 0.73, conifer + broad -0.63
+1000m - pipeline + trans 0.70, roads + veg edges 0.74, conifer + broad -0.66
+        roads + developed 0.64
+1250m - pipeline + trans 0.72, roads + veg edges 0.81, conifer + broad -0.66
+        roads + developed 0.72, roads + wells 0.60, veg edges + developed 0.64
+1500m - pipeline + trans 0.72, roads + veg edges 0.84, conifer + broad -0.70
+        roads + developed 0.75, roads + wells 0.65, veg edges + developed 0.70
+1750m - pipeline + trans 0.72, roads + veg edges 0.85, conifer + broad -0.71
+        roads + developed 0.78, roads + wells 0.65, veg edges + developed 0.73
+2000m - 
+2250m -
+2500m - 
+2750m -
+3000m - 
+
+
+
+
 
 # 2. Explore the independent variables 
 ```{r}
