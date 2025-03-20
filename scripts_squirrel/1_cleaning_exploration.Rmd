@@ -1,0 +1,115 @@
+---
+title: "1_data_cleaning"
+output: html_document
+date: "2025-03-19"
+
+---
+
+# Load libraries
+```{r}
+library(PerformanceAnalytics)
+library(tidyverse)
+```
+
+
+## General cleaning/ checking and combining data 
+
+# 1. Import the data and clean it up a bit
+
+```{r}
+# species presence absence data
+dets <- read_csv("OSM_proportional_detections_merged_2021_2022.csv")
+
+# we just need red squirrel detections 
+dets <- dets %>%
+  select(site, 
+         red_squirrel, 
+         absent_red_squirrel)
+
+str(dets)
+summary(dets)
+
+# covariate data 
+covs <- read_csv("OSM_covariates_grouped_2021_2022.csv")
+
+str(covs)
+summary(covs)
+
+# all reading in ok
+
+```
+
+2. Merge the response and covariates
+```{r}
+squirrel <- dets %>%
+  left_join(covs, by = "site")
+
+# difference in row #s so I will check the site numbers 
+length(unique(dets$site))
+length(unique(covs$site))
+
+# one site not in dets but probably camera that did not function 
+```
+
+
+## Data exploration 
+
+# 1. Test for multicollinearity
+```{r}
+squirrel_cor <- squirrel %>%
+  select(lc_broadleaf, 
+         lc_coniferous, 
+         lc_mixed, wells, 
+         veg_edges, 
+         harvest, 
+         pipeline, 
+         trails,
+         roads, 
+         seismic_lines,
+         seismic_lines_3D, 
+         transmission_lines)
+
+chart.Correlation(squirrel_cor, 
+                  histogram = TRUE, 
+                  method = "spearman")
+
+# broadleaf and conifer -0.72
+# veg edge and roads 0.86
+# pipeline and trans line 0.59
+# roads and wells 0.57
+# wells and pipeline 0.58
+# pipeline and roads 0.6
+# wells and 3D seismic
+
+```
+
+# 2. Explore the independent variables 
+```{r}
+# histograms of everything!
+
+squirrel_cor %>% 
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~.x %>% 
+        
+         # use the hist function on the data from previous pipe
+        hist(.,
+             
+             # set the main title to y (each variable)
+             main = .y))
+
+
+# harvest has tons of zeros, same with transmission lines
+
+```
+
+# 3. Distribution of response variable 
+
+```{r}
+hist(squirrel$red_squirrel)
+hist(squirrel$absent_red_squirrel)
+```
+
+
+
+

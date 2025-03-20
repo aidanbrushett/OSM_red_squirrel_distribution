@@ -1,0 +1,33 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-03-20"
+---
+
+```{r}
+library(MuMIn)
+library(glmmTMB)
+library(tidyverse)
+library(broom) 
+```
+
+1. Models 
+
+```{r }
+# pull out a specific buffer size 
+squirrel_500 <- squirrel[squirrel$buff_dist == 500, ] 
+```
+
+```{r}
+
+# conifer
+conifer <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     (1|array), 
+                     data = squirrel_500, 
+                     family = "binomial")
+
+summary(conifer)
+                     
+```
+
