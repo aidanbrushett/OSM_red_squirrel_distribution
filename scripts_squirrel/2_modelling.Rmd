@@ -14,10 +14,62 @@ library(broom)
 1. Models 
 
 ```{r }
-# pull out a specific buffer size 
-squirrel_500 <- squirrel[squirrel$buff_dist == 500, ] 
+# run global model at each scale to determine the best performing scale? 
+squirrel_mods <- squirrel %>%
+  
+  purrr::map(
+    ~.x %>%
+      
+      glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
+                        # HFI
+                        scale(harvest) +
+                        # scale(pipeline) +
+                        # scale(roads) +
+                        scale(seismic_lines) +
+                        scale(seismic_lines_3D) +
+                        scale(trails) +
+                        # scale(transmission_lines) +
+                        # scale(veg_edges) +
+                        scale(wells) +
+                        scale(osm_industrial) +
+                        scale(pipeline_transmission_lines) +
+                        
+                        # VEG covariates in numerical order
+                        scale(lc_grassland) +
+                        # scale(lc_coniferous) +
+                        # scale(lc_broadleaf) +
+                        # scale(lc_mixed) +
+                        scale(lc_developed) +
+                        # scale(lc_shrub) +
+                        scale(lc_forest) +
+                         
+                    # Random effect of array
+                    (1|array),
+                   data = .,
+                   family = 'binomial'))
+
 ```
 
+
+
+```{r model selection for scale}
+
+# run model selection and save the results as a tibble for graphing use later
+squirrel_global_model.sel <- model.sel(squirrel_mods) %>% 
+  
+  as.data.frame() %>% 
+  
+  rownames_to_column(var = 'Model')  %>%
+  
+  mutate(Dataset = deparse(substitute(squirrel)))
+
+# look at model selection results
+squirrel_global_model.sel
+
+```
+
+
+Now we can get into our actual hypotheses 
 ```{r}
 
 # conifer

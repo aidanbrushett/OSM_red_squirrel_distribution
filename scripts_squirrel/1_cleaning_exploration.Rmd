@@ -9,6 +9,7 @@ date: "2025-03-19"
 ```{r}
 library(PerformanceAnalytics)
 library(tidyverse)
+library(MuMIn)
 ```
 
 
@@ -16,13 +17,18 @@ library(tidyverse)
 
 # 1. Import the data and clean it up a bit
 
+Aidan created weekly proportional presence absence data 
+
 ```{r}
 # species presence absence data
-dets <- read_csv("OSM_proportional_detections_merged_2021_2022.csv")
+#dets <- read_csv("OSM_proportional_detections_merged_2021_2022.csv")
+
+dets <- read_csv("all_arrays_proportional_presence_weekly_clean.csv")
 
 # we just need red squirrel detections 
 dets <- dets %>%
-  select(site, 
+  select(array, 
+         site, 
          red_squirrel, 
          absent_red_squirrel)
 
@@ -32,6 +38,8 @@ summary(dets)
 # covariate data 
 covs <- read_csv("OSM_covariates_grouped_2021_2022.csv")
 
+# need to drop the leading zeros in the site numbers so it can be combined with weeks
+
 str(covs)
 summary(covs)
 
@@ -39,20 +47,38 @@ summary(covs)
 
 ```
 
-2. Merge the response and covariates
+2. Fix the array/site ID in the covs dataframe so that we can merge them 
 ```{r}
-
-# difference in row #s so I will check the site numbers 
-length(unique(dets$site))
-length(unique(covs$site))
-
-# one site not in dets but probably camera that did not function 
+covs <- covs %>%
+    mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
 ```
 
 
-## Data exploration 
+```{r select the covariates we want}
+covs <- covs %>%
+  select(site, buff_dist, harvest, pipeline, roads, seismic_lines, 
+         seismic_lines_3D, transmission_lines, veg_edges, wells, 
+         lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)
 
-# 1. Test for multicollinearity
+
+# group some variables 
+covs$seismic <- covs$seismic_lines + covs$seismic_lines_3D
+covs$linear <- covs$transmission_lines + covs$pipeline
+
+
+# drop the columns we don't need
+covs <- covs %>%
+  select(-pipeline, -transmission_lines, -seismic_lines, -seismic_lines_3D)
+
+```
+
+Create a list with all the covariates for each scale. 
+
 ```{r subset data}
 
 buffer_frames <- list()
@@ -66,7 +92,7 @@ for (i in unique(covs$buff_dist)){
     filter(buff_dist == i)
   
   # list of dataframes
-  buffer_frames <-c (buffer_frames, list(df))
+  buffer_frames <- c(buffer_frames, list(df))
 }
 
 # name list objects so we can extract names for plotting 
@@ -97,6 +123,7 @@ buffer_frames <- buffer_frames %>%
 
 ```
 
+Join this to the response
 
 ```{r response metric}
 
@@ -106,9 +133,148 @@ squirrel <- buffer_frames %>%
     ~.x %>% 
       
       left_join(dets,
-                by = 'site'))
+                by = 'site') %>%
+      
+      select(array, everything()))
+
 ```
 
+Model each variable at each scale. 
+
+```{r model for each variable at every scale }
+
+squirrel_mods <- squirrel %>%
+  
+  purrr::map(
+    ~ {
+      # get the buffer values (for model names)
+      buff_dist_value <- unique(.x$buff_dist)
+
+      # Pass squirrel to df and exclude site and buff_dist
+      df <- .x %>%
+        select(-site, -buff_dist)
+
+      # Treat array as a factor
+      df$array <- as.factor(df$array)
+
+      # these column are for the predictors 
+      numeric_columns <- df %>% 
+        
+        # they should already be numeric
+        select(where(is.numeric)) %>%
+          
+        # make sure the response is not included!
+        select(- red_squirrel, - absent_red_squirrel) %>%
+        names()
+
+      # List to store models
+      model_list <- purrr::map(numeric_columns, ~ {
+        
+        # Create model formula
+        formula <- as.formula(paste("cbind(red_squirrel, absent_red_squirrel) ~", 
+                                    .x, "+ (1 | array)"))
+
+        # model name using the variable and the buffer size 
+        model_name <- paste0(.x, "_", buff_dist_value)
+
+        # Run the glmmTMB model for each numeric variable
+        model <- glmmTMB::glmmTMB(
+          formula = formula,
+          data = df,
+          family = 'binomial'
+        )
+        
+        # Add the model name as a list element 
+        model_with_name <- list(model = model, model_name = model_name)
+
+        return(model_with_name) 
+      })
+      
+      return(model_list) 
+    })
+
+
+```
+
+
+```{r model names? }
+
+# Extract model names from squirrel_mods
+model_names <- purrr::map(squirrel_mods, ~ purrr::map(.x, "model_name"))
+
+# Flatten the list to get a simple vector of names
+model_names <- unlist(model_names)
+
+
+```
+
+
+``` {r look at the model results for scale}
+
+model_info_df <- purrr::map_dfr(squirrel_mods, ~ {
+  
+  purrr::map_dfr(.x, ~ {
+    model <- .x$model
+    model_name <- .x$model_name
+    
+    # Extract the model's AIC, BIC, and logLik
+    model_summary <- data.frame(
+      model_name = model_name,
+      AIC = AIC(model),
+      
+      logLik = logLik(model),
+      stringsAsFactors = FALSE
+    )
+    
+    return(model_summary)
+  })  #
+
+
+# remove lc because that is causing issues
+model_info_df <- model_info_df %>%
+  mutate(model_name = str_remove(model_name, "^lc_"))
+
+
+# new dataframe for each variable models
+
+# Create dynamic data frames for each unique prefix in model_name
+unique_prefixes <- unique(str_extract(model_info_df$model_name, "^[^_]+"))
+
+# Create a list to store data frames
+model_dataframes <- list()
+
+# Loop over each prefix and create a corresponding data frame
+for (prefix in unique_prefixes) {
+  model_dataframes[[prefix]] <- model_info_df %>%
+    filter(str_starts(model_name, prefix))
+}
+
+
+# separate dataframs
+
+# Loop through the list and create separate data frames
+for (name in names(model_dataframes)) {
+  assign(name, model_dataframes[[name]])
+}
+
+
+# all in one
+
+# Extract the row with the highest AIC (or any other column you prefer)
+top_model <- model_dataframes %>%
+  map(~ .x[which.min(.x$AIC), ]) %>%  # Extract the row with the highest AIC from each data frame
+  bind_rows()  # Combine the rows into a single data frame
+
+
+```
+Note about scales
+
+No clear top model: 
+- conifer (scale all over the place)
+- linear (some similar between 1000 - 2000m) 
+- shrub (just under 2 units, between 1 and 4000)
+- veg edges (top ~ 4000 m)
+- wells (3 top ~ 4000 m)
 
 ```{r correlation at all buffer sizes}
 
@@ -118,14 +284,15 @@ squirrel %>%
     ~.x %>% 
       
       # select only columns with covaraites not other info
-      select(harvest:osm_industrial) %>% 
+      
+select(harvest:osm_industrial) %>% 
       
       # use chart.correlation 
-      chart.Correlation(.,
-                        histogram = TRUE, 
-                        method = "pearson")
+ chart.Correlation(.,
+                      histogram = TRUE, 
+                       method = "pearson")
   )
-
+  
 ```
 
 250m - roads and veg edges 0.71
@@ -144,9 +311,6 @@ squirrel %>%
 2500m - 
 2750m -
 3000m - 
-
-
-
 
 
 # 2. Explore the independent variables 
