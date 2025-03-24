@@ -1,0 +1,169 @@
+---
+title: "OSM Covariate Extraction"
+author: "Emerald Arthurs"
+date: "Last updated 2024-04-18"
+---
+
+PLEASE READ ME!!!
+
+Before using R to extract the covariates, I selected the portion of the datasets around the sites using the "Select Features by Area" tool. I DO NOT RECOMMMEND CLIPPING the files as this caused loss of features. I did this in QGIS because R was very slow for processing the full layers, although possible if you have a more powerful computer. 
+
+The steps for this are (Follow steps 1 to 3 if subsetting the layer is required): 
+1. Use the "Select Features by Area" tool to select a portion of the layer and export as a new shapefile (see note about CRS below). Make 7 km buffers around the site to ensure you select a large enough portion of the layer (change this if your largest buffers will be larger than 5km.
+2. Manually look at the layers to make sure all features were selected (important for HFI). Zoom in and compare the subsetted and the original layers.
+3. Ensure that the camera sites align in the correct locations (I used lakes/towns to double-check and visually reference this, just to be sure CRS are all good).
+4. Reproject the layer to the appropriate UTM Zone. 
+5. Follow the below script in R with the subsetted/reprojected data.
+6. QAQC in QGIS or ArcGIS: compare the output dataframe and the original layer. I created a 250 m and 1000 m buffers and looked a multiple sites in detail to ensure each feature type was represented in the output .csv for those buffers. 
+
+
+!!! IMPORTANT NOTE !!! Check the validity of all layer CRS BEFORE extracting covariates in R. READ BELOW. 
+
+
+The ABMI layers are in NAD83 / Alberta 10-TM (Forest) when downloaded but extracting in UTM Zones is slightly more accurate due to the smaller area and the position of the central meridian. If sites are in western Alberta, UTM Zone 11 will need to be used (make sure to check a map of UTM Zones and choose the most suitable one). Once you select the area of interest, save the shape file as a new shape file with the UTM Zone CRS. 
+
+
+- Column names in the code below might need to be adjusted year-to-year for the deployment shapefile or the ABMI files.
+
+
+Download the landcover data: https://abmi.ca/home/data-analytics/da-top/da-product-overview/Data-Archive/Land-Cover.html
+
+And the human footprint data: https://abmi.ca/home/data-analytics/da-top/da-product-overview/Human-Footprint-Products/HF-inventory.html
+
+
+```{r Load packages}
+library(sf) # work with spatial data
+library(dplyr) # data organization/working with dataframes
+library(tidyr) # data organization/working with dataframes
+```
+
+```{r Loading data, change the names to the current camera array/subsetted or full feature layers}
+# Camera locations (point)
+sites_r <- st_read("./Site shapefile/OSM_2023_update.shp")
+
+#bbox <- st_as_sfc(st_bbox(st_buffer(sites_r, dist=10000)))
+
+#plot(bbox[[1]])
+
+#st_write(bbox, "./Site shapefile/bounding_box.shp", delete_layer = TRUE)
+
+plot(sites_r[1])
+
+
+# load human features layer (will be slow)
+human_features <- st_read("./HFI_clip/HFI_clip.shp")
+
+# load vegetation shapefile
+landcover <- st_read("./Landcover_clip/Landcover_clip.shp")
+
+#make sure its all projected correctly 
+st_crs(human_features, describe = TRUE)
+st_crs(landcover, describe = TRUE)
+st_crs(sites_r, describe = TRUE)
+
+# double check that they are all format "sf" and "dataframe"
+str(sites_r)
+str(landcover)
+str(human_features)
+```
+
+```{r Extract covariates for the human feature classes}
+
+#note that the proportion of the buffers covered by the human feature types will not sum to 1 (unlike the landcover layer) because the full polygon will not be covered by features (lots of small features like roads and pipelines)
+
+#create dataframe
+result_df_hf <- data.frame()
+
+# Get all unique classes in the dataset
+all_hf_classes <- unique(human_features$FEATURE_TY)
+
+# Loop through each buffer size
+for (buffer_size in seq(250, 5000, by = 250)) {
+  # Loop over each site
+  for (i in 1:nrow(sites_r)) {
+    site <- sites_r[i, ]
+    # Create a buffer at each site for each buffer size
+    buffer_poly <- st_buffer(site, dist = buffer_size)
+    # Intersect the buffer with the landcover layer
+    hfdata <- st_intersection(buffer_poly, human_features)
+    
+    # Calculate the area of the buffer
+    total_area <- st_area(buffer_poly)
+    
+    # Calculate proportions for each feature type class, apply to each "class" of the data
+    proportions <- numeric(length(all_hf_classes))
+    for (j in seq_along(all_hf_classes)) {
+      class <- all_hf_classes[j]
+      # calculate area of each class (subset the hf data frame to the current 'class' of interest)
+      class_area <- sum(st_area(hfdata[hfdata$FEATURE_TY == class, ]))
+      # divide by the total area
+      proportions[j] <- class_area / total_area
+    }
+    
+    #put the proportions into a row with the site and buffer size - update this column name as needed for 
+    #your shapefile
+    result_row_hf <- c(as.character(site$Cmr_S__), buffer_size, class_area, total_area, proportions)
+    
+    #put this into the main dataframe
+    result_df_hf <- rbind(result_df_hf, result_row_hf)
+  }
+}
+
+# Set column names
+colnames(result_df_hf) <- c("Site", "BUFF_DIST", "Feature_Area", "Buffer_Area", paste0(all_hf_classes))
+
+# save the dataframe as a csv!!
+write.csv(result_df_hf, "OSM_LU09_LU14_LU16_LU22_HFI_2023_20250209.csv", row.names = FALSE)
+```
+
+
+```{r Extract covariates for the landcover classes}
+
+#All of these rows should sum to 1 (or very very close to 1)
+
+#create dataframe
+result_df_lc <- data.frame()
+
+# Get all unique classes in the dataset
+all_lc_classes <- as.character(unique(landcover$LC_class))
+
+# Create a buffer at each site for each buffer size
+for (buffer_size in seq(250, 5000, by = 250)) {
+  # Loop over each site
+  for (i in 1:nrow(sites_r)) {
+    site <- sites_r[i, ]
+    # Create a buffer at each site for each buffer size
+    buffer_poly <- st_buffer(site, dist = buffer_size)
+    # Intersect the buffer with the landcover layer
+    lcdata <- st_intersection(buffer_poly, landcover)
+    
+    # Calculate the area of the buffer
+    total_area <- st_area(buffer_poly)
+    
+    # Calculate proportions for each feature type class, apply to each "class" of the data
+    proportions <- numeric(length(all_lc_classes))
+    for (j in seq_along(all_lc_classes)) {
+      class <- all_lc_classes[j]
+      # calculate area of each class
+      class_area <- sum(st_area(lcdata[lcdata$LC_class == class, ]))
+      # divide by the total area
+      proportions[j] <- class_area / total_area
+    }
+    
+    #put the proportions into a row with the site and buffer size - update this column name as needed for 
+    #your shapefile
+    result_row_lc <- c(as.character(site$Cmr_S__), buffer_size, proportions)
+    
+    #put this into the main dataframe
+    result_df_lc <- rbind(result_df_lc, result_row_lc)
+  }
+}
+
+# Set column names
+colnames(result_df_lc) <- c("Site", "BUFF_DIST", paste0('LC_class', all_lc_classes))
+    
+
+# save the dataframe as a csv!!
+write.csv(result_df_lc, "OSM_LU09_LU16_LU14_LU22_VEG_2023_20250209.csv", row.names = FALSE)
+```
+

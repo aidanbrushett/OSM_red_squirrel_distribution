@@ -1,0 +1,561 @@
+---
+title: "6.1.Explanatory.extraction.trial2.RMD"
+author: "Becca Smith"
+date: "09/03/2023"
+output: html_document
+---
+
+```{r Load packages}
+library(tidyr) # data tidying
+library(stringr) # working with strings
+library(dplyr) # data manipulation
+library(reproducible) # reproducible working directories
+library(raster) # working with rasters
+library(landscapemetrics) # configuration metrics
+library(landscapetools) # visualization
+# library(ggplot2) # plots
+# library(ggpubr) # combining plots
+# library(lubridate) # dates
+library(sf) # shp files
+library(readr)
+```
+
+```{r Set up directories}
+# Will manually read in the inputs because they are spatial files and my pea brain does not know how to read in those with reproducible...
+
+outputDirectory <- checkPath(file.path(getwd(), "6.Explanatory.extraction/outputs"),
+                             create = TRUE)
+```
+
+```{r Load data}
+LU2 <- raster("3.Spatial.prep/outputs/HFI_and_LC_LU2.tif")
+LU3 <- raster("3.Spatial.prep/outputs/HFI_and_LC_LU3.tif")
+cams <- st_read("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/2.Data.exploration/outputs/cameralocations.shp")
+```
+
+```{r Filter cams for ease of use}
+camsLU2 <- cams %>% 
+  filter(Array == "LU2")
+
+camsLU3 <- cams %>% 
+  filter(Array == "LU3") 
+```
+
+```{r Check the rasters}
+# Note: the show_landscape() fxn does not work on many devices because of the size of the raster 
+
+# Make sure it is good to go
+check_landscape(LU2)
+check_landscape(LU3)
+# Yay it is!
+# They have different # of values because residential polygons are not in LU3
+```
+
+```{r Extract landscapemetrics - raster w/ all landcover classes}
+# Extract all the metrics I want, with the landcover classes all seperated
+# E.g. the input raster is broken up into the forest types, grassland, shrubland etc.
+
+#### LU2 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU2, y = camsLU2, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_np", "lsm_c_pland", "lsm_c_pd", "lsm_c_area_mn", "lsm_c_lpi"),
+           # Directions set to queen's case (8)
+           directions = 8, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU2$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_all/LU2_all_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+
+#### LU3 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU3, y = camsLU3, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_np", "lsm_c_pland", "lsm_c_pd", "lsm_c_area_mn", "lsm_c_lpi"),
+           # Directions set to queen's case (8)
+           directions = 8, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU3$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_all/LU3_all_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+
+```
+
+```{r Combine the outputs}
+# Set working directory to where all configuration exports are
+setwd("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_all")
+
+# Put all configuration metric .csv files into a list
+# There is one .csv per radius per LU
+A <- list.files(full.names = TRUE) %>% 
+  lapply(function(file) {
+    df <- readr::read_csv(file)
+    df$filename <- gsub("LU\\d+_all_(\\d+)\\.csv", "\\1", basename(file))
+    return(df)
+  })
+
+# Make into dataframe removing unwanted columns
+df <- as.data.frame(bind_rows(A)) 
+
+# Reduce to columns you want 
+df <- df %>% 
+  dplyr::select(-layer,
+         -level,
+         -percentage_inside,
+         -id,
+         site = plot_id,
+         radius = filename) 
+
+# Ensure that radius is being read as an integer not a character
+df$radius <- as.integer(df$radius)
+
+# Change the raster value from a number to the associated name
+# Read in raster .csv
+raster_values_all <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/raster_values_all.csv")
+# Need to first ensure that the column names align between dataframes
+raster_values_all <- raster_values_all %>% 
+  dplyr::select(class = ï..Raster.value,
+         label = Label)
+# Now merge together
+df <- df %>% 
+  left_join(raster_values_all, by = "class")
+# We hate caps
+df$label <- tolower(df$label)
+
+# Now we didn't actually want everything we extracted
+# Didn't seem to be a way to modify the extraction code so we will do it now
+# For the area_mn and lpi metrics, we just want to retain values for classes 1, 5, 6, 8, 10, 14, 18
+# Create a vector of the allowed class values 
+allowed_classes <- c(1, 5, 6, 8, 10, 14, 18)
+# filter the dataframe using dplyr's filter() function and negating the condition
+df <- df %>%
+  filter(!(metric %in% c("area_mn", "lpi") & !(class %in% allowed_classes))) %>% 
+  # For some reason there are some NA labels
+  # Checked and they have NA values too (idk where they came from)
+  filter(!is.na(label)) %>% 
+  dplyr::select(-class) %>% 
+  rename(class = label) 
+
+# Format it nicely
+metrics_raster_all <- df %>% 
+  dplyr::select(site, radius, class, metric, value) %>% 
+  group_by(site) %>% 
+  arrange(radius) %>% 
+  mutate(raster = "all")
+
+# Export
+write.csv(metrics_raster_all, file.path(outputDirectory,"metrics_raster_all.csv"),
+          row.names = F)
+
+# Remove what we don't need before dealing with the next raster
+rm(df, A, raster_values_all, LU2, LU3)
+```
+
+```{r Load in landscapemetrics from above chunk}
+metrics_raster_all <- read.csv(file.path(outputDirectory, "metrics_raster_all.csv"))
+```
+
+```{r Alter raster to combine landcover classes}
+# Rather than fixing the initial raster, I'll just fix the final two from part 3 (maybe confusing but makes more sense time-wise)
+# Make all landcover classes the same value, EXCEPT water
+# Water cannot be treated the same as it just is not
+LU2[LU2 %in% c(1, 5, 6, 8, 10, 14)] <- 1
+writeRaster(LU2, "C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/LU2_simplified.tif")
+LU3[LU3 %in% c(1, 5, 6, 8, 10, 14)] <- 1
+writeRaster(LU3, "C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/LU3_simplified.tif")
+```
+
+```{r Load rasters required (simplified landcover classes)}
+# If needing to edit the rasters, load in in the 'load data' chunk and run through/modify the raster in the 'alter raster' chunk
+# Otherwise, the script will auto run and input the rasters as they were last checked over
+# These ones are the exports from the chunk above, all landcover classes the same value, EXCEPT water
+LU2_simp <- raster("6.Explanatory.extraction/outputs/LU2_simplified.tif")
+LU3_simp <- raster("6.Explanatory.extraction/outputs/LU3_simplified.tif")
+```
+
+
+```{r Extract landscapemetrics - raster w/ SIMPLIFIED landcover classes}
+#### LU2 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU2_simp, y = camsLU2, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_np", "lsm_c_pland", "lsm_c_pd", "lsm_c_area_mn", "lsm_c_lpi", "lsm_c_tca", "lsm_c_core_mn"),
+           # Directions set to queen's case (8)
+           directions = 8,
+           # Number of pixels considered to be edge
+           edge_depth = 1, 
+           # If cells ONLY neighbour the landscape boundary, count as core
+           consider_boundary = TRUE, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU2$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp/LU2_simp_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+
+#### LU3 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU3_simp, y = camsLU3, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_np", "lsm_c_pland", "lsm_c_pd", "lsm_c_area_mn", "lsm_c_lpi", "lsm_c_tca", "lsm_c_core_mn"),
+           # Directions set to queen's case (8)
+           directions = 8, 
+           # Number of pixels considered to be edge
+           edge_depth = 1, 
+           # If cells ONLY neighbour the landscape boundary, count as core
+           consider_boundary = TRUE, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU3$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp/LU3_simp_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+```
+
+```{r Extract EDGE landscapemetrics - raster w/ SIMPLIFIED landcover classes}
+#### LU2 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU2_simp, y = camsLU2, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_ed", "lsm_c_te"),
+           # Directions set to queen's case (8)
+           directions = 8,
+           # Number of pixels considered to be edge
+           edge_depth = 1, 
+           # If cells ONLY neighbour the landscape boundary, do not count as edge
+           consider_boundary = FALSE, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU2$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp_edge/LU2_simp_edge_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+
+#### LU3 ####
+for (size in seq(250, 5000, by = 250)) {
+  output <- sample_lsm(LU3_simp, y = camsLU3, 
+           # Create the buffer and sizes of buffer (we made a loop for size above)
+           shape = "circle", size = size, 
+           # Calculations we would like to extract
+           what = c("lsm_c_ed", "lsm_c_te"),
+           # Directions set to queen's case (8)
+           directions = 8, 
+           # Number of pixels considered to be edge
+           edge_depth = 1, 
+           # If cells ONLY neighbour the landscape boundary, do not count as edge
+           consider_boundary = FALSE, 
+           # Returns NA for classes not present in sample plots
+           all_classes = TRUE,
+           # Matches up the buffer with the site, very important
+           plot_id = camsLU3$Site,
+           # Print warning messages
+           verbose = TRUE, 
+           # Print progress report
+           progress = TRUE,
+           # Do not return the clipped raster
+           return_raster = FALSE)
+  
+  # assign a name to the data frame that includes the size value
+  name <- paste0("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp_edge/LU3_simp_edge_", size)
+  
+  # export the data frame to a CSV file with the assigned name
+  write.csv(output, file = paste0(name, ".csv"), row.names = FALSE)
+}
+```
+
+
+```{r Combine the outputs}
+# Set working directory to where all configuration exports are
+setwd("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp")
+
+# Put all configuration metric .csv files into a list
+# There is one .csv per radius per LU
+A <- list.files(full.names = TRUE) %>% 
+  lapply(function(file) {
+    df <- readr::read_csv(file)
+    df$filename <- gsub("LU\\d+_simp_(\\d+)\\.csv", "\\1", basename(file))
+    return(df)
+  })
+
+# Set working directory to where all configuration exports are
+setwd("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/raster_simp_edge")
+
+# Put all configuration metric .csv files into a list
+# There is one .csv per radius per LU
+B <- list.files(full.names = TRUE) %>% 
+  lapply(function(file) {
+    df <- readr::read_csv(file)
+    df$filename <- gsub("LU\\d+_simp_edge_(\\d+)\\.csv", "\\1", basename(file))
+    return(df)
+  })
+
+# Make into dataframe removing unwanted columns
+df1 <- as.data.frame(bind_rows(A)) %>% 
+  dplyr::select(-layer,
+         -level,
+         -percentage_inside,
+         -id,
+         site = plot_id,
+         radius = filename) 
+
+# Make into dataframe removing unwanted columns
+df2 <- as.data.frame(bind_rows(B)) %>% 
+  dplyr::select(-layer,
+         -level,
+         -percentage_inside,
+         -id,
+         site = plot_id,
+         radius = filename) 
+
+# Combine into a single dataframe
+df <- rbind(df1, df2)
+
+# Ensure that radius is being read as an integer not a character
+df$radius <- as.integer(df$radius)
+
+# Clean some things up to not get confused
+rm(df1, df2, A, B)
+
+# Change the raster value from a number to the associated name
+# Read in raster .csv
+raster_values_simp <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/raster_values_simp.csv")
+# Need to first ensure that the column names align between dataframes
+raster_values_simp <- raster_values_simp %>% 
+  dplyr::select(class = ï..Raster.value,
+         label = Label)
+# Now merge together
+df <- df %>% 
+  left_join(raster_values_simp, by = "class")
+# We hate caps
+df$label <- tolower(df$label)
+
+# Now we didn't actually want everything we extracted
+# Didn't seem to be a way to modify the extraction code so we will do it now
+
+# Create a vector of the allowed class values 
+allowed_classes <- c(1, 18)
+# filter the dataframe using dplyr's filter() function and negating the condition
+df <- df %>%
+  filter(!(metric %in% c("ed", "te") & !(class %in% allowed_classes))) %>% 
+  # For some reason there are some NA labels
+  # Checked and they have NA values too (idk where they came from)
+  filter(!is.na(label)) 
+  
+
+allowed_classes <- c(1, 15, 21, 23, 25, 26, 27, 30)
+
+df <- df %>% 
+  filter(!(metric %in% c("tca", "core_mn", "area_mn") & !(class %in% allowed_classes)))
+
+allowed_classes <- 1
+
+df <- df %>% 
+  filter(!(metric %in% c("lpi", "np", "pd", "pland") & !(class %in% allowed_classes))) %>% 
+  dplyr::select(-class) %>% 
+  rename(class = label) 
+
+# Format it nicely
+metrics_raster_simp <- df %>% 
+  dplyr::select(site, radius, class, metric, value) %>% 
+  group_by(site) %>% 
+  arrange(radius) %>% 
+  mutate(raster = "simp")
+
+# Export
+write.csv(metrics_raster_simp, file.path(outputDirectory,"metrics_raster_simp.csv"),
+          row.names = F)
+
+# Remove what we don't need before dealing with the next raster
+rm(df, raster_values_simp, allowed_classes)
+```
+
+```{r}
+# # If not running the above chunks, read in
+# metrics_raster_all <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/metrics_raster_all.csv")
+# metrics_raster_simp <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/metrics_raster_simp.csv")
+
+# Join together the two dataframes with made above
+configuration_metrics <- rbind(metrics_raster_all, metrics_raster_simp)
+
+# Check for NAs, need to make sure that they are just in the value column
+nas <- configuration_metrics[!complete.cases(configuration_metrics),]
+# Check an make sure that value is the only column with NAs
+# Lucky for us, it is
+rm(nas)
+
+# Then replace all the NAs with 0s in the configuration_metrics dataframe
+configuration_metrics[is.na(configuration_metrics)] <- 0
+```
+
+```{r}
+# There is a larger issue here
+# There were no metrics extracted for class = residential in LU3 sites
+# Because it's 0 for all, there is no pixels of that class in the raster
+# BUT we still need to ensure this is in the data frame...
+
+# Create a vector of the metrics
+metrics <- c("np", "pd", "pland", "area_mn", "core_mn", "tca")
+
+# Create a vector of radii
+radii <- seq(from = 250, to = 5000, by = 250)
+
+# Create an empty data frame
+df <- data.frame(site = character(),
+                 metric = character(),
+                 radius = numeric(),
+                 stringsAsFactors = FALSE)
+
+# Loop over each site
+for (site in unique(camsLU3$Site)) {
+  # Loop over each metric for the current site
+  for (metric in metrics) {
+    # Loop over each radius
+    for (radius in radii) {
+      # Create a new row with the current site, metric, and radius
+      row <- data.frame(site = site, metric = metric, radius = radius)
+      # Append the row to the data frame
+      df <- rbind(df, row)
+    }
+  }
+}
+
+# Sort the data frame by site, metric, and radius
+df <- df[order(df$site, df$metric, df$radius), ]
+
+df <- df %>% 
+  mutate(class = 'residential',
+         raster = 'none',
+         value = as.numeric(0)) %>% 
+  dplyr::select(site, radius, class, metric, value, raster) 
+
+
+# Bind together with the rest
+configuration_metrics <- rbind(configuration_metrics, df)
+
+# Export
+write.csv(configuration_metrics, file.path(outputDirectory,"configuration_metrics.csv"),
+          row.names = F)
+
+rm(df, radii, metrics, row, cols, metric, metrics, radius, site, metrics_raster_all, metrics_raster_simp)
+
+# There should be 93 sites * (103 metrics * 20 scales) if done correctly
+# Yes, 191580 obs!
+```
+
+```{r}
+configuration_metrics <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/6.Explanatory.extraction/outputs/configuration_metrics.csv")
+
+# Spread into nicer format
+df <- configuration_metrics %>%
+  mutate(feature_metric = paste(class, metric, sep ="_"))%>%
+  dplyr::select(-c(class, metric, raster))%>%
+  pivot_wider(names_from = feature_metric, values_from = value)
+
+# Load in the detections data
+dets <- read.csv("C:/Users/rebec/Documents/MSc/Chapter 1 - Oil Sands/5.Analysis/4.Response.prep/outputs/analysis.df.csv")
+
+# Ensure that the configuration metrics and dets dataframes have the same sites
+unique(dets$site) %in% unique(df$site)
+# All true, yay! 
+
+#So now merge those together
+analysis.df <- merge(dets, df, by = c("site"))
+# Should be 127 columns - 103 metrics, site, radius, array, gricell, + 20 species responses
+
+# There is a space after some of the LU2 in array, fix this
+analysis.df <- analysis.df %>% 
+  mutate(array = case_when(array == "LU2 " ~ "LU2",
+                           array != "LU2 " ~ array))
+
+
+# Alter some of the column names
+names(analysis.df) <- gsub(" ", ".", names(analysis.df))
+names(analysis.df) <- gsub("roads.&.verges", "roads", names(analysis.df))
+
+analysis.df <- analysis.df %>% 
+  mutate(natural_landcover_te = natural.landcover_te - water_te,
+         natural_landcover_ed = natural.landcover_ed - water_ed) %>% 
+  dplyr::select(-c(natural.landcover_te, water_te, natural.landcover_ed, water_ed))
+
+#Lets do some quality checking, should still be the same number of obs per site
+A <- analysis.df %>%
+  group_by(site) %>%
+  summarise(n_obs = n())
+# YES all good here
+rm(A)
+
+# Export
+write.csv(analysis.df, file.path(outputDirectory,"analysis.df_final.csv"),
+          row.names = F)
+
+```
+
