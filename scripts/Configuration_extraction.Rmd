@@ -55,7 +55,7 @@ for(i in 1:length(sites)){
                      vect(st_buffer(site, 
                                     dist = 5500)))
   
-  plot(config_local)
+  #plot(config_local)
   
   config_data_lu <- list()
 
@@ -107,6 +107,8 @@ for(i in 1:length(sites)){
   config_data[[site$site]] <- config_data_lu
   
 }
+
+save(config_data, file = "./data_squirrel/configuration_metrics.RData")
 ```
 
 
