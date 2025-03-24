@@ -11,23 +11,113 @@ library(tidyverse)
 library(broom) 
 ```
 
-1. Models 
+## 1. Models 
 
-```{r }
-# pull out a specific buffer size 
-squirrel_500 <- squirrel[squirrel$buff_dist == 500, ] 
-```
+The "core model" is the best performing habiat model that will be used in 
+subsequent models. 
 
-```{r}
+```{r the core model(s)}
 
-# conifer
-conifer <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous) +
+# null model 
+core_h0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
                      (1|array), 
-                     data = squirrel_500, 
+                     data = squirrel, 
                      family = "binomial")
 
-summary(conifer)
-                     
+# conifer
+core_h1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+# conifer + mixed
+core_h2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     scale(mixed) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+# conifer + mixed + broadleaf
+core_h3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     scale(lc_mixed) +
+                     scale(lc_broadleaf)
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+# conifer + mixed + broadleaf + open veg
+core_h4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     scale(lc_mixed) +
+                     scale(lc_broadleaf) +
+                     scale(lc_grassland) +
+                     scale(lc_shrub) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
 ```
+
+Disturbance models 
+
+```{r the disturbance model(s)}
+dist_h0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     top model  +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+dist_h1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(seismic)  +
+                     scale(linear) +
+                     scale(roads) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+
+dist_h2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(harvest)  +
+                     scale(wells) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+
+dist_h3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(osm_industrial)  +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+
+dist_h4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     core model +
+                     scale(seismic)  +
+                     scale(linear) +
+                     scale(roads) +
+                     scale(harvest)  +
+                     scale(wells) +
+                     scale(osm_industrial)  +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+
+dist_h5 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     core model +
+                     scale(seismic)  +
+                     scale(linear) +
+                     scale(roads) +
+                     scale(harvest)  +
+                     scale(wells) +
+                     (1|array), 
+                     data = squirrel, 
+                     family = "binomial")
+
+```
+
 
