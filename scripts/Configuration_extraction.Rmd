@@ -18,13 +18,14 @@ knitr::opts_chunk$set(echo = TRUE,
 ```{r}
 library(tidyverse)
 library(terra)
-library(raster)
 library(sf)
 library(landscapemetrics)
 ```
 
 ```{r}
 configuration <- rast("./rasters/Merged_HFI_Landcover_Simplified.tif")
+
+configuration_full <- rast("./rasters/Merged_HFI_Landcover.tif")
 
 plot(configuration)
 
@@ -51,11 +52,11 @@ for(i in 1:length(sites)){
   
   site <- sites[i,]
   
-  config_local <- crop(configuration,
+  config_local <- crop(configuration_full,
                      vect(st_buffer(site, 
                                     dist = 5500)))
   
-  #plot(config_local)
+  plot(config_local)
   
   config_data_lu <- list()
 
@@ -65,7 +66,7 @@ for(i in 1:length(sites)){
     
     output <- sample_lsm(config_local, y = site, 
              # Create the buffer and sizes of buffer (we made a loop for size above)
-             shape = "circle", size = 100, 
+             shape = "circle", size = size, 
              # Calculations we would like to extract
              what = c("lsm_c_np", # NUMBER OF PATCHES
                       #"lsm_c_pland", # PERCENT LAND (composition)
@@ -82,7 +83,7 @@ for(i in 1:length(sites)){
              # Directions set to queen's case (8)
              directions = 8,
              # Number of pixels considered to be edge
-             edge_depth = 10, # a 50 meter edge depth
+             edge_depth = 4, # a 20 meter edge depth, in line with literature
              # If cells ONLY neighbour the landscape boundary, count as core
              consider_boundary = TRUE, 
              # Returns NA for classes not present in sample plots
@@ -96,21 +97,37 @@ for(i in 1:length(sites)){
              # Do not return the clipped raster
              return_raster = FALSE)
     
-    output$buffer <- size
-    
-    config_data_lu[[as.character(size)]] <- output
+    config_data_lu[[as.character(size)]] <- output %>%
+  
+        mutate(buffer = size,
+             value = replace_na(value, 0),
+             class = as.character(class) %>% replace_na(., "LANDSCAPE"),
+             class = case_when(class == "0" ~ "WATER",
+                               class == "1" ~ "NATURAL",
+                               class == "2" ~ "ANTHROPOGENIC",
+                               TRUE ~ class)
+                               ) %>%
+      
+      select(-id, -layer)
     
     gc()
     
   }
   
-  config_data[[site$site]] <- config_data_lu
+  config_data[[site$site]] <- bind_rows(config_data_lu)
   
 }
 
-save(config_data, file = "./data_squirrel/configuration_metrics.RData")
+save(config_data, file = "./data/raw/configuration_metrics.RData")
 ```
 
+```{r}
+load("./data/raw/configuration_metrics.RData")
+
+config_data <- bind_rows(config_data)
+
+write_csv(config_data, "./data/processed/OSM_2021_2022_2023_configuration_metrics_simplified.csv")
+```
 
 
 
