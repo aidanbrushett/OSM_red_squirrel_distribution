@@ -10,6 +10,7 @@ date: "2025-03-19"
 library(PerformanceAnalytics)
 library(tidyverse)
 library(MuMIn)
+library(dplyr)
 ```
 
 
@@ -32,14 +33,22 @@ dets <- dets %>%
          red_squirrel, 
          absent_red_squirrel)
 
+# remove CL and WF arrays
+dets <- dets %>%
+  filter(array != "CL") %>%
+  filter(array != "WF")
+  
+
 str(dets)
 summary(dets)
 
+dets$array <- as.factor(dets$array)
+
+# there should be 10 arrays 
+levels(dets$array)
 
 # covariate data 
 covs <- read_csv("OSM_covariates_grouped_2021_2022.csv")
-
-# need to drop the leading zeros in the site numbers so it can be combined with weeks
 
 str(covs)
 summary(covs)
@@ -50,6 +59,8 @@ summary(covs)
 
 2. Fix the array/site ID in the covs dataframe so that we can merge them 
 ```{r}
+
+# need to drop the leading zeros in the site numbers so it can be combined with week data
 covs <- covs %>%
     mutate(
               site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
