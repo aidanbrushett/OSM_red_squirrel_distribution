@@ -35,6 +35,7 @@ dets <- dets %>%
 str(dets)
 summary(dets)
 
+
 # covariate data 
 covs <- read_csv("OSM_covariates_grouped_2021_2022.csv")
 
