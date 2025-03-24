@@ -16,33 +16,38 @@ library(broom)
 The "core model" is the best performing habiat model that will be used in 
 subsequent models. 
 
+How to do proper model syntax when there is different scales? 
+
 ```{r the core model(s)}
 
 # null model 
 core_h0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
                      (1|array), 
-                     data = squirrel, 
+                     data = squirrel[["250 meter buffer"]], 
                      family = "binomial")
 
 # conifer
 core_h1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous) +
                      (1|array), 
-                     data = squirrel, 
+                     data = squirrel[["250 meter buffer"]], 
                      family = "binomial")
+
+summary(core_h1)
 
 # conifer + mixed
 core_h2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous) +
-                     scale(mixed) +
+                     scale(squirrel_250$lc_coniferous) +
+                     scale(squirrel_1000$lc_mixed) +
                      (1|array), 
-                     data = squirrel, 
+                     data = squirrel[["250 meter buffer"]], 
                      family = "binomial")
 
+summary(core_h2)
 # conifer + mixed + broadleaf
 core_h3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous) +
-                     scale(lc_mixed) +
+                     scale(squirrel_250$lc_coniferous) +
+                     scale(squirrel_1000$lc_mixed) +
                      scale(lc_broadleaf)
                      (1|array), 
                      data = squirrel, 

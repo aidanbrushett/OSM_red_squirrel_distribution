@@ -24,7 +24,7 @@ Aidan created weekly proportional presence absence data
 # species presence absence data
 #dets <- read_csv("OSM_proportional_detections_merged_2021_2022.csv")
 
-dets <- read_csv("all_arrays_proportional_presence_weekly_clean.csv")
+dets <- read_csv("data_squirrel/all_arrays_proportional_presence_weekly_clean.csv")
 
 # we just need red squirrel detections 
 dets <- dets %>%
@@ -48,7 +48,7 @@ dets$array <- as.factor(dets$array)
 levels(dets$array)
 
 # covariate data 
-covs <- read_csv("OSM_covariates_grouped_2021_2022.csv")
+covs <- read_csv("data_squirrel/OSM_covariates_grouped_2021_2022.csv")
 
 str(covs)
 summary(covs)
@@ -89,7 +89,7 @@ covs <- covs %>%
 
 ```
 
-Create a list with all the covariates for each scale. 
+Create a list with all the covariates for each scale. This code was taken from Marissa's OSM analysis. 
 
 ```{r subset data}
 
@@ -239,7 +239,8 @@ model_info_df <- purrr::map_dfr(squirrel_mods, ~ {
     )
     
     return(model_summary)
-  })  #
+  })  
+})
 
 
 # remove lc because that is causing issues
@@ -269,6 +270,7 @@ for (name in names(model_dataframes)) {
   assign(name, model_dataframes[[name]])
 }
 
+write.csv(top_model, "top_model.csv")
 
 # all in one
 
@@ -283,8 +285,8 @@ Note about scales
 
 No clear top model: 
 - conifer (scale all over the place)
-- linear (some similar between 1000 - 2000m) 
-- shrub (just under 2 units, between 1 and 4000)
+- linear (some similar between 1000 - 2250m) 
+- shrub (just under 2 units apart, between 1 and 4000)
 - veg edges (top ~ 4000 m)
 - wells (3 top ~ 4000 m)
 
