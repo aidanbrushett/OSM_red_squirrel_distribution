@@ -229,7 +229,7 @@ model_info_df <- purrr::map_dfr(squirrel_mods, ~ {
     model <- .x$model
     model_name <- .x$model_name
     
-    # Extract the model's AIC, BIC, and logLik
+    # get the AIC values 
     model_summary <- data.frame(
       model_name = model_name,
       AIC = AIC(model),
@@ -270,14 +270,13 @@ for (name in names(model_dataframes)) {
   assign(name, model_dataframes[[name]])
 }
 
-write.csv(top_model, "top_model.csv")
 
 # all in one
 
 # Extract the row with the highest AIC (or any other column you prefer)
 top_model <- model_dataframes %>%
-  map(~ .x[which.min(.x$AIC), ]) %>%  # Extract the row with the highest AIC from each data frame
-  bind_rows()  # Combine the rows into a single data frame
+  map(~ .x[which.min(.x$AIC), ]) %>%  # row with the highest AIC from each data frame
+  bind_rows()  # rows into a single data frame
 
 
 ```
@@ -298,11 +297,10 @@ squirrel %>%
     ~.x %>% 
       
       # select only columns with covaraites not other info
-      
-select(harvest:osm_industrial) %>% 
+      select(harvest:osm_industrial) %>% 
       
       # use chart.correlation 
- chart.Correlation(.,
+      chart.Correlation(.,
                       histogram = TRUE, 
                        method = "pearson")
   )
