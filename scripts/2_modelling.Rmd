@@ -11,6 +11,11 @@ library(tidyverse)
 library(broom) 
 ```
 
+```{r format for modelling}
+
+squirrels_all <- 
+```
+
 ## 1. Models 
 
 The "core model" is the best performing habiat model that will be used in 
