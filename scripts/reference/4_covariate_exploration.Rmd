@@ -94,7 +94,7 @@ Let's read in the response variable that we'd like to model. We'll start with mo
 We will not need to re-do our covariate exploration for different response variables, since 1) the weekly metrics use the exact same set of sites, and 2) we have no temporally varying covariates. A daily, weekly, hourly, etc. response variable may change the selection of sites that we use, but we can cross that bridge if it comes to it.
 
 ```{r}
-data <- read_csv("./data/processed/all_arrays_proportional_presence_monthly_clean.csv",
+data <- read_csv("./data/processed/all_arrays_proportional_presence_weekly_clean.csv",
                  col_types = cols(array = col_character(),
                                   site = col_character(),
                                   .default = col_number())) %>%
@@ -143,8 +143,8 @@ rm(buffer, human_footprint, human_features, cols)
 
 landscape_covs <- data %>%
   
-  mutate(coyote_abundance = coyote / months_active,
-         lynx_abundance = lynx / months_active) %>%
+  mutate(coyote_abundance = coyote / weeks_active,
+         lynx_abundance = lynx / weeks_active) %>%
   
   group_by(array) %>%
   
@@ -187,7 +187,7 @@ rm(all_sites_sf)
 ## 4.2. Dataframe with covariates
 
 ```{r}
-write_csv(data, "./data/processed/all_arrays_proportional_presence_monthly_with_covariates.csv")
+write_csv(data, "./data/processed/all_arrays_proportional_presence_weekly_with_covariates.csv")
 ```
 
 # 5. Covariate exploration
