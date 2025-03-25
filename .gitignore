@@ -60,6 +60,13 @@ rsconnect/
 # Huge ABMI geodatabases
 **/ABMIw2wLCV2010_v10.gdb/
 **/HFI2021.gdb/
+**/OSM_landscape_data.gdb/
+**/OSM_mapping.gdb/
+maps/ABMIw2wLCV2010_v10.gdb/
+maps/HFI2021.gdb/
+maps/OSM_landscape_data.gdb/
+maps/OSM_mapping.gdb/
 
 # Raster folder (HUGE)
-/rasters/
+**/rasters/
+rasters/
