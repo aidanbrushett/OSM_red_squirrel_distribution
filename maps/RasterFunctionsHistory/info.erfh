@@ -1,0 +1,267 @@
+{
+  "version" : 1,
+  "name" : "Raster Functions History",
+  "historyItems" : [
+    {
+      "id" : "{7C490684-EAD0-4B5C-AE2F-29CA80D23DB1}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Mosaic Rasters",
+      "description" : "Stitches a set of raster datasets together to create one dataset.",
+      "rftPath" : "Mosaic Rasters_{7C490684-EAD0-4B5C-AE2F-29CA80D23DB1}.rft.xml",
+      "startTime" : "638781805650000000",
+      "endTime" : "638781805660000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{0101BD60-A625-4484-BA66-3A761630E84A}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Mosaic Rasters",
+      "description" : "Stitches a set of raster datasets together to create one dataset.",
+      "rftPath" : "Mosaic Rasters_{0101BD60-A625-4484-BA66-3A761630E84A}.rft.xml",
+      "startTime" : "638781806530000000",
+      "endTime" : "638781806530000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{F3229676-0F6F-416D-9AD9-C9B1BDF62D97}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{F3229676-0F6F-416D-9AD9-C9B1BDF62D97}.rft.xml",
+      "startTime" : "638783660580000000",
+      "endTime" : "638783660830000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{34C1BCEF-F6C1-4BBC-9216-CE49CEB60423}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{34C1BCEF-F6C1-4BBC-9216-CE49CEB60423}.rft.xml",
+      "startTime" : "638781806770000000",
+      "endTime" : "638781807020000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{3A749691-4B82-4B07-847B-09D777915CF9}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{3A749691-4B82-4B07-847B-09D777915CF9}.rft.xml",
+      "startTime" : "638781811940000000",
+      "endTime" : "638781812190000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{63391205-9267-4DD8-9B64-AA7CCC47900A}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{63391205-9267-4DD8-9B64-AA7CCC47900A}.rft.xml",
+      "startTime" : "638781851210000000",
+      "endTime" : "638781851370000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{E6373BCF-DB8F-43D5-A973-D13B150ABA6A}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{E6373BCF-DB8F-43D5-A973-D13B150ABA6A}.rft.xml",
+      "startTime" : "638783641660000000",
+      "endTime" : "638783641910000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{05D0EF74-70C0-488E-8319-BFD7A7F344E2}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{05D0EF74-70C0-488E-8319-BFD7A7F344E2}.rft.xml",
+      "startTime" : "638783723920000000",
+      "endTime" : "638783724370000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{7FEEBBA3-0110-411F-BCC5-7716C87DAC4D}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Merge Rasters",
+      "description" : "Merges a collection of rasters on the fly.",
+      "rftPath" : "Merge Rasters_{7FEEBBA3-0110-411F-BCC5-7716C87DAC4D}.rft.xml",
+      "startTime" : "638783786200000000",
+      "endTime" : "638783786650000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    }
+  ]
+}
