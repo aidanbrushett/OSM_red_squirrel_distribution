@@ -31,6 +31,15 @@ plot(configuration)
 configuration_full <- rast("./rasters/OSM_landcover_HFI_grouped.tif")
 plot(configuration_full)
 
+
+feature_types <- read_csv("./rasters/OSM_landcover_HFI_feature_types.csv") %>%
+  
+  select(feature_new, class = value_new) %>%
+  
+  mutate(class = as.character(class)) %>%
+  
+  distinct()
+
 #plot(landscape)
 #check_landscape(configuration)
 ```
@@ -50,7 +59,7 @@ plot(sites[1])
 
 config_data <- list()
 
-for(i in 1:length(sites)){
+for(i in 1:nrow(sites)){
   
   site <- sites[i,]
   
@@ -64,7 +73,7 @@ for(i in 1:length(sites)){
 
   for (size in seq(250, 5000, by = 250)) {
     
-    cat("\r Extracting site", i, "of", length(sites), "(", site$site, "//", size, "m buffer )")
+    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer )")
     
     output <- sample_lsm(config_local, y = site, 
              # Create the buffer and sizes of buffer (we made a loop for size above)
@@ -122,17 +131,19 @@ for(i in 1:length(sites)){
 save(config_data, file = "./data/raw/configuration_metrics_simplified.RData")
 ```
 
-```{r Extract landscapemetrics - raster w/ SIMPLIFIED landcover classes}
-# Create a buffer of 5500m around the site
-# Convert the buffer to a SpatVector for use with terra
-# Extract the raster values within the buffer
+```{r Extract landscapemetrics - raster w/ OSM grouped landcover classes}
 
 config_data <- list()
 
-for(i in 1:length(sites)){
+start_time <- Sys.time()
+
+for(i in 1:nrow(sites)){
   
   site <- sites[i,]
   
+  # Create a buffer of 5500m around the site
+  # Convert the buffer to a SpatVector for use with terra
+  # Extract the raster values within the buffer
   config_local <- crop(configuration_full,
                      vect(st_buffer(site, 
                                     dist = 5500)))
@@ -143,7 +154,9 @@ for(i in 1:length(sites)){
 
   for (size in seq(250, 5000, by = 250)) {
     
-    cat("\r Extracting site", i, "of", length(sites), "(", site$site, "//", size, "m buffer )")
+    progress <- ((i - 1) * 20 + size/250) / (20*nrow(sites))
+
+    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer ):", round(as.numeric(difftime(Sys.time(), start_time, units = "hours")), 4) * (1 - progress) / progress, "hours remaining    ")
     
     output <- sample_lsm(config_local, y = site, 
              # Create the buffer and sizes of buffer (we made a loop for size above)
@@ -195,20 +208,53 @@ for(i in 1:length(sites)){
 save(config_data, file = "./data/raw/configuration_metrics_grouped.RData")
 ```
 
+```{r}
+load("./data/raw/configuration_metrics_simplified.RData")
 
+config_simplified <- config_data %>%
+  
+  bind_rows(.) %>%
+  
+  filter(!(level == 'class' & class == "LANDSCAPE")) %>%
+  
+  mutate(covariate = paste0(tolower(class), "_", metric),
+         site = plot_id) %>%
+  
+  select(-metric, -level, -class, -percentage_inside, -plot_id) %>%
+  
+  pivot_wider(names_from = covariate,
+              values_from = value)
 
-
-
+write_csv(config_simplified, "./data/raw/OSM_configuration_simplified_2021_2022_2023.csv")
+```
 
 
 
 ```{r}
-load("./data/raw/configuration_metrics.RData")
+load("./data/raw/configuration_metrics_grouped.RData")
 
-config_data <- bind_rows(config_data)
+config_grouped <- config_data %>%
+  
+  bind_rows(.) %>%
+  
+  # landscape scale metrics (e.g. splitting index have an NA that we want to replace)
+  mutate(class = ifelse(level == "landscape", "landscape", as.character(class))) %>%
+  
+  drop_na(class) %>%
+  
+  left_join(feature_types, by = 'class') %>%
+  
+  mutate(class = tolower(feature_new) %>%
+           replace_na(., "landscape")) %>%
+  
+  mutate(covariate = paste0(tolower(class), "_", metric),
+         site = plot_id) %>%
+  
+  select(-metric, -level, -class, -percentage_inside, -plot_id, -feature_new) %>%
+  
+  pivot_wider(names_from = covariate,
+              values_from = value)
 
-write_csv(config_data, "./data/processed/OSM_2021_2022_2023_configuration_metrics_simplified.csv")
+write_csv(config_grouped, "./data/raw/OSM_configuration_grouped_2021_2022_2023.csv")
 ```
-
-
 
