@@ -1,0 +1,49 @@
+---
+title: "2_step_selection"
+output: html_document
+date: "2025-03-25"
+---
+```{r libraries}
+library(MASS)
+library(dplyr)
+```
+
+```{r data for modelling}
+squirrels_all <- read_csv("all_arrays_proportional_presence_weekly_with_covariates.csv")
+
+```
+
+## Step selection 
+
+For the core, disturbance, and configuration models we will run stepAIC at each spatial scale and find the most parsimonious model at the best scale for each model type. 
+
+glabal to null for each scale
+aic to compare scales to pick the best
+
+bind rows for lists then loop through stepAIC 
+
+For the 'core' model (natural features), variables are: conifer forest, broadleaf forest, mixed forest, shrub, and grassland. At each scale this is 100 variables 
+
+```{r step selection for core model}
+
+null_core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
+                     (1|array), 
+                     data = core_data, 
+                     family = "binomial")
+
+# we need a loop to create the full model ?
+full_core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                      scale(lc_coniferous) +
+                      scale(lc_broadleaf +
+                      scale(lc_mixed) +
+                      scale(lc_shrub) +
+                      scale(lc_grassland) +
+                      (1|array),
+                      data = core_data, 
+                      family = "binomial"))
+
+```
+
+
+For the 'disturbance' model (anthropogenic features), variables are: seismic lines, linear (transmission and pipelines), roads, harvest blocks, well pads, and industrial features. 
+

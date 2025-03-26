@@ -233,8 +233,6 @@ model_info_df <- purrr::map_dfr(squirrel_mods, ~ {
     model_summary <- data.frame(
       model_name = model_name,
       AIC = AIC(model),
-      
-      logLik = logLik(model),
       stringsAsFactors = FALSE
     )
     
@@ -296,7 +294,7 @@ squirrel %>%
   purrr::map(
     ~.x %>% 
       
-      # select only columns with covaraites not other info
+      # select only columns with covarites not other info
       select(harvest:osm_industrial) %>% 
       
       # use chart.correlation 
@@ -352,6 +350,41 @@ hist(squirrel$red_squirrel)
 hist(squirrel$absent_red_squirrel)
 ```
 
+# Formatting for step selection
+Combine seismic and seismic 3D
+Combine pipeline and transmission line
 
+
+```{r read in the data}
+squirrels_all <- read_csv("all_arrays_proportional_presence_weekly_with_covariates.csv")
+
+# remove CL and WF arrays
+dets <- dets %>%
+  filter(array != "CL") %>%
+  filter(array != "WF")
+  
+
+str(dets)
+summary(dets)
+
+dets$array <- as.factor(dets$array)
+
+# there should be 10 arrays 
+levels(dets$array)
+```
+
+```{r formatting before analysis}
+# remove the columns that we don't need and then combine some columns
+# select the columns we need 
+
+squirrels_all <- squirrels_all %>%
+  select(array, site, red_squirrel, red_squirrel_absent, harvest, pipeline, roads, seismic_lines, 
+         seismic_lines_3D, transmission_lines, wells, 
+         lc_grassland, lc_coniferous, lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)
+
+# combine the columns 
+
+
+```
 
 
