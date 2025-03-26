@@ -22,11 +22,13 @@ Aidan created weekly proportional presence absence data
 
 ```{r}
 # species presence absence data
-dets <- read_csv("data/raw/all_arrays_proportional_presence_weekly_clean.csv")
+#dets <- read_csv("OSM_proportional_detections_merged_2021_2022.csv")
+
+dets <- read_csv("data_squirrel/all_arrays_proportional_presence_weekly_clean.csv")
 
 # we just need red squirrel detections 
 dets <- dets %>%
-  dplyr::select(array, 
+  select(array, 
          site, 
          red_squirrel, 
          absent_red_squirrel)
@@ -42,44 +44,23 @@ summary(dets)
 
 dets$array <- as.factor(dets$array)
 
-length(unique(dets$site))
+length(unique(covs$site))
 
 # there should be 10 arrays 
 levels(dets$array)
 
 # covariate data 
-covs <- read_csv("data/raw/OSM_covariates_grouped_2021_2022_2023.csv")
+covs <- read_csv("data_squirrel/OSM_covariates_grouped_2021_2022.csv")
 
 str(covs)
 summary(covs)
-
-length(unique(covs$site))
 
 # all reading in ok
 
 ```
 
-
-```{r select the covariates we want}
-covs <- covs %>%
-  dplyr::select(site, buff_dist, harvest, pipeline, roads, seismic_lines, 
-         seismic_lines_3D, transmission_lines, wells, 
-         lc_grassland, lc_coniferous, 
-         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)
-
-
-# group some variables 
-covs$seismic <- covs$seismic_lines + covs$seismic_lines_3D
-covs$linear <- covs$transmission_lines + covs$pipeline
-
-
-# drop the columns we don't need
-covs <- covs %>%
-  dplyr::select(-pipeline, -transmission_lines, -seismic_lines, -seismic_lines_3D)
-
-```
-
-```{r fix the leading zeros and stuff}
+2. Fix the array/site ID in the covs dataframe so that we can merge them 
+```{r}
 
 # need to drop the leading zeros in the site numbers so it can be combined with week data
 covs <- covs %>%
@@ -91,17 +72,37 @@ covs <- covs %>%
 ```
 
 
-```{r join dataframes}
-data_long <- dets %>%
-  left_join(covs, by = "site")
+```{r select the covariates we want}
+covs <- covs %>%
+  select(site, buff_dist, harvest, pipeline, roads, seismic_lines, 
+         seismic_lines_3D, transmission_lines, veg_edges, wells, 
+         lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)
 
-length(unique(data_long$buff_dist))
+
+# group some variables 
+covs$seismic <- covs$seismic_lines + covs$seismic_lines_3D
+covs$linear <- covs$transmission_lines + covs$pipeline
+
+
+# drop the columns we don't need
+covs <- covs %>%
+  select(-pipeline, -transmission_lines, -seismic_lines, -seismic_lines_3D)
 
 ```
-We now have a 'long format' dataframe that we will use for step AIC
 
 
-Now lets create a list with all the covariates for each scale. This code was taken from Marissa's OSM analysis. 
+```{r long format analysis dataframe for step AIC}
+
+# join the covs and the dets because we want each buffer represented as a row not a separate column
+long_data <- dets %>%
+  left_join(covs, by = "site")
+
+unique(long_data$buff_dist)
+```
+
+
+Create a list with all the covariates for each scale. This code was taken from Marissa's OSM analysis. 
 
 ```{r subset data}
 
@@ -159,7 +160,7 @@ squirrel <- buffer_frames %>%
       left_join(dets,
                 by = 'site') %>%
       
-      dplyr::select(array, everything()))
+      select(array, everything()))
 
 ```
 
@@ -344,18 +345,76 @@ hist(squirrel$red_squirrel)
 hist(squirrel$absent_red_squirrel)
 ```
 
+# Formatting for step selection
+Combine seismic and seismic 3D
+Combine pipeline and transmission line
 
-```{r separate dataframes for each modelling step}
 
-core_data <- data_long %>%
-   dplyr::select(
-    array, site, red_squirrel, absent_red_squirrel, lc_grassland, lc_coniferous, lc_mixed,
-    lc_broadleaf, lc_shrub)
+```{r read in the data}
+squirrels_all <- read_csv("all_arrays_proportional_presence_weekly_with_covariates.csv")
 
-dist_data <- data_long %>%
+# remove CL and WF arrays
+dets <- dets %>%
+  filter(array != "CL") %>%
+  filter(array != "WF")
+  
+
+str(dets)
+summary(dets)
+
+dets$array <- as.factor(dets$array)
+
+# there should be 10 arrays 
+levels(dets$array)
+```
+
+
+```{r formatting before analysis}
+# select the columns that we need
+
+squirrels_all <- squirrels_all %>%
  dplyr::select(
-    array, site, red_squirrel, absent_red_squirrel, harvest, seismic, linear, 
-    wells, roads, osm_industrial)
+    array, site, red_squirrel, absent_red_squirrel, 
+    starts_with("harvest"), 
+    starts_with("seismic_lines"),
+    starts_with("seismic_lines_3D"),
+    starts_with("transmission_lines"),
+    starts_with("wells"),
+    starts_with("roads"),
+    starts_with("lc_grassland"), 
+    starts_with("lc_coniferous"), 
+    starts_with("lc_mixed"), 
+    starts_with("lc_broadleaf"),
+    starts_with("lc_shrub"), 
+    starts_with("osm_industrial"), 
+    starts_with("pipeline")
+  )
+ 
+core_data <- squirrels_all %>%
+   dplyr::select(
+    array, site, red_squirrel, absent_red_squirrel, 
+    starts_with("lc_grassland"), 
+    starts_with("lc_coniferous"), 
+    starts_with("lc_mixed"), 
+    starts_with("lc_broadleaf"),
+    starts_with("lc_shrub")
+   )
+
+dist_data <- squirrels_all %>%
+ dplyr::select(
+    array, site, red_squirrel, absent_red_squirrel, 
+    starts_with("harvest"), 
+    starts_with("seismic_lines"),
+    starts_with("seismic_lines_3D"),
+    starts_with("transmission_lines"),
+    starts_with("wells"),
+    starts_with("roads"),
+    starts_with("osm_industrial"), 
+    starts_with("pipeline")
+ )
+
+# combine the seismic and seismic 3D and pipe and transmission lines
 
 ```
+
 
