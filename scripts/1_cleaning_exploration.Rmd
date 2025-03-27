@@ -9,7 +9,6 @@ date: "2025-03-19"
 ```{r}
 library(PerformanceAnalytics)
 library(tidyverse)
-library(MuMIn)
 library(dplyr)
 ```
 
@@ -17,8 +16,6 @@ library(dplyr)
 ## General cleaning/ checking and combining data 
 
 # 1. Import the data and clean it up a bit
-
-Aidan created weekly proportional presence absence data 
 
 ```{r}
 # species presence absence data
@@ -41,7 +38,6 @@ str(dets)
 summary(dets)
 
 dets$array <- as.factor(dets$array)
-
 length(unique(dets$site))
 
 # there should be 10 arrays 
@@ -98,8 +94,8 @@ data_long <- dets %>%
 length(unique(data_long$buff_dist))
 
 ```
-We now have a 'long format' dataframe that we will use for step AIC
 
+We now have a 'long format' dataframe that we will use for step AIC
 
 Now lets create a list with all the covariates for each scale. This code was taken from Marissa's OSM analysis. 
 
@@ -344,18 +340,4 @@ hist(squirrel$red_squirrel)
 hist(squirrel$absent_red_squirrel)
 ```
 
-
-```{r separate dataframes for each modelling step}
-
-core_data <- data_long %>%
-   dplyr::select(
-    array, site, red_squirrel, absent_red_squirrel, lc_grassland, lc_coniferous, lc_mixed,
-    lc_broadleaf, lc_shrub)
-
-dist_data <- data_long %>%
- dplyr::select(
-    array, site, red_squirrel, absent_red_squirrel, harvest, seismic, linear, 
-    wells, roads, osm_industrial)
-
-```
 

@@ -9,41 +9,245 @@ library(dplyr)
 ```
 
 ```{r data for modelling}
-squirrels_all <- read_csv("all_arrays_proportional_presence_weekly_with_covariates.csv")
 
+# this dataframe is formatted and ready to go
+data_long <- read_csv("data/processed/analysis_df.csv")
 ```
 
 ## Step selection 
 
-For the core, disturbance, and configuration models we will run stepAIC at each spatial scale and find the most parsimonious model at the best scale for each model type. 
+For the core, disturbance, and configuration models we will run stepAIC at each spatial scale and find the most parsimonious model at the best scale for each model type. Then, choose the overall best model of all spatial scales based on the lowest AIC
 
-glabal to null for each scale
-aic to compare scales to pick the best
 
-bind rows for lists then loop through stepAIC 
+For the 'core' model (natural features), variables are: conifer forest, broadleaf forest, mixed forest, shrub, and grassland.
 
-For the 'core' model (natural features), variables are: conifer forest, broadleaf forest, mixed forest, shrub, and grassland. At each scale this is 100 variables 
+```{r a manual loop to do step wise AIC for the habitat data}
 
-```{r step selection for core model}
+# vector of predictor variables 
+predictors <- c("lc_coniferous", "lc_broadleaf", "lc_mixed", "lc_shrub", "lc_grassland")
 
-null_core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
-                     (1|array), 
-                     data = core_data, 
-                     family = "binomial")
+# empty list to store the results
+model_results_core <- list()
 
-# we need a loop to create the full model ?
-full_core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                      scale(lc_coniferous) +
-                      scale(lc_broadleaf +
-                      scale(lc_mixed) +
-                      scale(lc_shrub) +
-                      scale(lc_grassland) +
-                      (1|array),
-                      data = core_data, 
-                      family = "binomial"))
+# Loop over each unique buffer distance 
+buff_dist <- unique(data_long$buff_dist)
 
+for (buffer in buff_dist) {
+  
+  # Subset the data based on the current buffer distance
+  subset_data <- data_long[data_long$buff_dist == buffer, ]
+  
+  # all possible combinations of predictors (31 different combos for core variables)
+  model_combinations <- unlist(lapply(1:length(predictors), 
+                                      function(i) combn(predictors, i, 
+                                      simplify = FALSE)), recursive = FALSE)
+  
+  # create an empty list to store the models and their AICs
+  models <- list()
+  
+  # loop through each combination of variables and fit the model
+  for (combo in model_combinations) {
+    
+    # Create the formula for the current combination of predictors
+    formula <- as.formula(paste("cbind(red_squirrel, absent_red_squirrel) ~", 
+                                paste(combo, collapse = " + "), "+ (1 | array)"))
+    
+    # fit the model with the current formula
+    model <- tryCatch({
+      glmmTMB(formula, data = subset_data, family = "binomial")
+    }
+    )
+    
+    # store the model and AIC
+    if (!is.null(model)) {
+      models[[paste(combo, collapse = "_")]] <- AIC(model)
+    }
+  }
+  
+  # dataframe with the model names andAICs
+  model_aic_df <- data.frame(
+    model = names(models),
+    AIC = unlist(models)
+  )
+  
+  # Rank the models by AIC
+  model_aic_df <- model_aic_df %>% 
+    arrange(AIC)
+  
+  # Store the ranked models in the results list
+  model_results_core[[as.character(buffer)]] <- model_aic_df
+}
+
+```
+
+
+```{r pull out the buffers}
+
+#  individual dataframes for each buffer
+for (buffer in buff_dist) {
+  
+  # get the ranked AIC dataframe for this buffer
+  model_aic_df <- model_results_list_core[[as.character(buffer)]]
+  
+  # assign the dataframe to a variable
+  assign(paste0("core_", buffer), model_aic_df)
+}
 ```
 
 
 For the 'disturbance' model (anthropogenic features), variables are: seismic lines, linear (transmission and pipelines), roads, harvest blocks, well pads, and industrial features. 
 
+```{r a manual loop to do step wise AIC for the disturbance data}
+
+# predictor variables 
+predictors <- c("harvest", "linear", "wells", "roads", "osm_industrial", "seismic")
+
+# empty list to store the results
+model_results_dist <- list()
+
+# Loop over each unique buffer distance 
+buff_dist <- unique(data_long$buff_dist)
+
+for (buffer in buff_dist) {
+  
+  # Subset the data based on the current buffer distance
+  subset_data <- data_long[data_long$buff_dist == buffer, ]
+  
+  # all possible combinations of predictors (31 different combos for core variables)
+  model_combinations <- unlist(lapply(1:length(predictors), 
+                                      function(i) combn(predictors, i, 
+                                      simplify = FALSE)), recursive = FALSE)
+  
+  # create an empty list to store the models and their AICs
+  models <- list()
+  
+  # loop through each combination of variables and fit the model
+  for (combo in model_combinations) {
+    
+    # Create the formula for the current combination of predictors
+    formula <- as.formula(paste("cbind(red_squirrel, absent_red_squirrel) ~", 
+                                paste(combo, collapse = " + "), "+ (1 | array)"))
+    
+    # fit the model with the current formula
+    model <- tryCatch({
+      glmmTMB(formula, data = subset_data, family = "binomial")
+    }
+    )
+    
+    # store the model and AIC
+    if (!is.null(model)) {
+      models[[paste(combo, collapse = "_")]] <- AIC(model)
+    }
+  }
+  
+  # dataframe with the model names andAICs
+  model_aic_df <- data.frame(
+    model = names(models),
+    AIC = unlist(models)
+  )
+  
+  # Rank the models by AIC
+  model_aic_df <- model_aic_df %>% 
+    arrange(AIC)
+  
+  # Store the ranked models in the results list
+  model_results_dist[[as.character(buffer)]] <- model_aic_df
+}
+
+```
+
+
+```{r pull out the buffers}
+
+#  individual dataframes for each buffer
+for (buffer in buff_dist) {
+  
+  # get the ranked AIC dataframe for this buffer
+  model_aic_df <- model_results_dist[[as.character(buffer)]]
+  
+  # assign the dataframe to a variable
+  assign(paste0("dist_", buffer), model_aic_df)
+}
+
+```
+
+
+This is not working for glmms. I guess stepAIC does not work for mixed models!!!
+
+```{r step selection for core model}
+
+# get all buffer distances 
+buff_dist <- unique(data_long$buff_dist)
+
+# Initialize a list to store the models
+model_results <- list()
+
+# Loop over each buffer distance (spatial scale)
+for (buffer in buff_dist) {
+  
+  subset_data <- data_long[data_long$buff_dist == buffer, ]
+                      
+  # Fit the initial model (you could replace this with your specific family or model type)
+  initial_model <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) 
+                                    ~ lc_grassland + lc_coniferous + 
+                                      lc_mixed + lc_broadleaf + lc_shrub + 
+                                      (1|array), 
+                                      data = subset_data, 
+                                     family = "binomial")
+  
+  
+  # Run stepwise AIC for model selection
+  step_model <- stepAIC(initial_model, 
+                        direction = "both")
+  
+
+  
+  # Store the results (AIC, model, and buffer distance) in the list
+  model_results[[paste0("buffer_", buffer)]] <- list(
+    model = step_model,
+    AIC = AIC(step_model)
+  )
+}
+
+# model results into a dataframe 
+
+#summary(step_model)
+```
+
+
+```{r step selection for disturbance model}
+
+# Get all buffer distances 
+buff_dist_ <- unique(data_long$buff_dist)
+
+
+model_results_dist <- list()
+
+
+for (buffer in buff_dist_) {
+   
+   subset_data <- data_long[data_long$buff_dist == buffer, ]
+   
+   null_model <- glm(cbind(red_squirrel, absent_red_squirrel) ~ 1, 
+                                     data = subset_data, 
+                                     family = "binomial")
+   
+   full_model <- glm(cbind(red_squirrel, absent_red_squirrel) ~ 
+                                   harvest, 
+                                     data = subset_data, 
+                                     family = "binomial")
+
+   step_model <- stepAIC(null_model, 
+                         direction = "both", 
+                         scope = list(lower = null_model, upper = full_model),
+                         data = subset_data)  
+   
+ 
+   model_results_dist[(buffer)] <- list(
+     model = step_model,
+     AIC = AIC(step_model)
+   )
+}
+
+
+```
