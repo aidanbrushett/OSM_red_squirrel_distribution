@@ -17,23 +17,6 @@ squirrels_all <- read_csv("data/raw/all_arrays_proportional_presence_weekly_clea
 ```
 
 ```{r clean up the wide dataframe for modelling}
-squirrels_all <- squirrels_all %>%
-   dplyr::select(
-    array, site, red_squirrel, absent_red_squirrel, 
-    starts_with("lc_grassland"), 
-    starts_with("lc_coniferous"), 
-    starts_with("lc_mixed"), 
-    starts_with("lc_broadleaf"),
-    starts_with("lc_shrub"),
-    starts_with("harvest"), 
-    starts_with("seismic_lines"),
-    starts_with("seismic_lines_3D"),
-    starts_with("transmission_lines"),
-    starts_with("wells"),
-    starts_with("roads"),
-    starts_with("osm_industrial"), 
-    starts_with("pipeline")
- )
 
 ```
 ## 1. Models 
@@ -46,30 +29,57 @@ How to do proper model syntax when there is different scales?
 ```{r the core model - 750 meter scale}
 
 core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous) +
-                     scale(lc_broadleaf) + 
-                     scale(lc_shrub) +
-                     scale(lc_grassland)  +
+                     scale(lc_coniferous_750) +
+                     scale(lc_broadleaf_750) + 
+                     scale(lc_shrub_750) +
+                     scale(lc_grassland_750)  +
                      (1|array), 
-                     data = squirrel, 
+                     data = data_wide, 
                      family = "binomial")
 
-```
+summary(core)
 
+```
 
 
 ```{r the disturbance model}
 
 dist <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(seismic)  +
-                     scale(linear) +
-                     scale(roads) +
-                     scale(harvest)  +
-                     scale(wells) +
+                     scale(seismic_2000)  +
+                     scale(linear_2000) +
+                     scale(roads_2000) +
+                     scale(harvest_2000)  +
+                     scale(wells_2000) +
                      (1|array), 
-                     data = squirrel, 
+                     data = data_wide, 
+                     family = "binomial")
+
+summary(dist)
+
+```
+
+
+```{r the configuration model}
+config <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                      +
+                     (1|array), 
+                     data = data_wide, 
                      family = "binomial")
 
 ```
 
 
+```{r the configuration + dist model}
+config <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                    
+                             
+                             scale(seismic_2000)  +
+                     scale(linear_2000) +
+                     scale(roads_2000) +
+                     scale(harvest_2000)  +
+                     scale(wells_2000) +
+                     (1|array), 
+                     data = data_wide, 
+                     family = "binomial")
+
+```

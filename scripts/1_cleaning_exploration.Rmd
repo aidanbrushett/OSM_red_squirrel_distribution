@@ -44,7 +44,7 @@ length(unique(dets$site))
 levels(dets$array)
 
 # covariate data 
-covs <- read_csv("data/raw/OSM_covariates_grouped_2021_2022_2023.csv")
+covs <- read_csv("data/raw/OSM_composition_grouped_2021_2022_2023.csv")
 
 str(covs)
 summary(covs)
@@ -87,7 +87,8 @@ covs <- covs %>%
 ```
 
 
-```{r join dataframes}
+```{r long and wide dataframes}
+
 data_long <- dets %>%
   left_join(covs, by = "site")
 
@@ -95,6 +96,36 @@ length(unique(data_long$buff_dist))
 
 #write.csv(data_long, "data/processed/analysis_df.csv")
 
+
+data_wide <- data_long %>%
+
+  # pivot wider was not collapsing the data very well with the camera and array variables present. 
+  # let's remove them first. 
+  dplyr::select(site, buff_dist, red_squirrel, absent_red_squirrel, harvest, seismic, 
+                roads, linear, wells, 
+         lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial) %>% 
+
+  # wide data
+  pivot_wider(names_from = buff_dist,
+              values_from = c(harvest, seismic, roads, linear, wells, 
+         lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)) %>%
+  
+  # let's re-add the array and camera columns that we previously lost.
+  # this code is redundant but seems to help `pivot_wider` do its job. 
+  separate_wider_delim(site,
+                       delim = '_',
+                       names = c('array',
+                                 'site'),
+                       cols_remove = FALSE) %>%
+  
+  # specify format of new columns
+  mutate(array = as.factor(array),
+         site = as.factor(site))
+
+
+str(data_wide)
 ```
 
 We now have a 'long format' dataframe that we will use for step AIC
@@ -341,5 +372,10 @@ squirrel_cor %>%
 hist(squirrel$red_squirrel)
 hist(squirrel$absent_red_squirrel)
 ```
+
+
+Format the wide data
+
+```{r wide dataframe for modelling}
 
 
