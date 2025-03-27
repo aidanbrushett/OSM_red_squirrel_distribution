@@ -23,56 +23,16 @@ subsequent models.
 
 How to do proper model syntax when there is different scales? 
 
-```{r the core model(s)}
+```{r the core model}
 
-# null model 
-core_h0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
+core <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+                     scale(lc_coniferous) +
+                     scale(lc_broadleaf) + 
+                     scale(lc_shrub) +
+                     scale(lc_grassland)  +
                      (1|array), 
-                     data = squirrels_all, 
+                     data = squirrel, 
                      family = "binomial")
-
-# conifer
-core_h1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous_250) +
-                     (1|array), 
-                     data = squirrels_all, 
-                     family = "binomial")
-
-summary(core_h1)
-
-# conifer + mixed
-core_h2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous_250) +
-                     scale(lc_mixed_1000) +
-                     (1|array), 
-                     data = squirrels_all, 
-                     family = "binomial")
-
-summary(core_h2)
-
-# conifer + mixed + broadleaf
-core_h3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous_250) +
-                     scale(lc_mixed_1000) +
-                     scale(lc_broadleaf_250) +
-                     (1|array), 
-                     data = squirrels_all, 
-                     family = "binomial")
-
-summary(core_h3)
-
-# conifer + mixed + broadleaf + open veg
-core_h4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
-                     scale(lc_coniferous_250) +
-                     scale(lc_mixed_1000) +
-                     scale(lc_broadleaf_250) +
-                     scale(lc_grassland_750) +
-                     scale(lc_shrub_1000) +
-                     (1|array), 
-                     data = squirrels_all, 
-                     family = "binomial")
-
-summary(core_h4)
 
 ```
 

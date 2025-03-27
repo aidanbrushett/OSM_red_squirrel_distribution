@@ -93,6 +93,8 @@ data_long <- dets %>%
 
 length(unique(data_long$buff_dist))
 
+#write.csv(data_long, "data/processed/analysis_df.csv")
+
 ```
 
 We now have a 'long format' dataframe that we will use for step AIC
