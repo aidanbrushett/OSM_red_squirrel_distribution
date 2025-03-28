@@ -16,6 +16,10 @@ library(PerformanceAnalytics)
 
 data_wide <- read_csv("data/processed/analysis_df_wide.csv")
 
+# remove weird first column 
+
+data_wide <- data_wide[, -1]
+
 ```
 
 ## 1. Models 
@@ -32,7 +36,7 @@ Lets keep conifer for now but come back to this later
 
 
 ```{r null model}
-null <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
+null0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
                      (1|array), 
                      data = data_wide, 
                      family = "binomial")
@@ -40,7 +44,7 @@ null <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 1 +
 
 ```{r the core model - 750 meter scale (H0)}
 
-core_0 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+core1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous_750)  + 
                      scale(lc_shrub_750) +
                      scale(lc_grassland_750)  +
@@ -56,12 +60,7 @@ core_b <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                      data = data_wide, 
                      family = "binomial")
 
-summary(core_0)
-summary(core_c)
-
 ```
-CORE AIC: 5290.4
-
 
 Roads and wells are highly correlated at 2000 m (0.66) so we removed roads. Roads and linear were 
 
@@ -82,7 +81,7 @@ summary(dist)
 
 ```{r the natural + disturbance model (H1)}
 
-dist_1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+dist2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous_750)  + 
                      scale(lc_shrub_750) +
                      scale(lc_grassland_750)  +
@@ -94,10 +93,9 @@ dist_1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                      data = data_wide, 
                      family = "binomial")
 
-summary(dist_1)
+summary(dist2)
 ```
 
-CORE + DIST AIC: 5073.0
 
 ```{r the configuration model}
 config_nat <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
@@ -140,7 +138,7 @@ anthro_edge comes out on top so lets just use that
 
 
 ```{r the natural + configuration (H2)}
-config_2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+config3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous_750)  + 
                      scale(lc_shrub_750) +
                      scale(lc_grassland_750)  +
@@ -150,13 +148,12 @@ config_2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                      data = data_wide, 
                      family = "binomial")
 
-summary(config_2)
+summary(config3)
 ```
 
-CORE + CONFIG AIC: 4681.4
 
 ```{r the natural + configuration + dist (H3)}
-core_dist_config_3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+coredistconfig4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous_750)  + 
                      scale(lc_shrub_750) +
                      scale(lc_grassland_750)  +
@@ -171,12 +168,10 @@ core_dist_config_3 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) 
                      data = data_wide, 
                      family = "binomial")
 
-summary(core_dist_config_3)
+summary(coredistconfig4)
 
 ```
 remove seismic for the additive model 
-CORE + CONFIG + DIST AIC: 4550.6
-
 
 Interactions: 
 conifer is 0.16
@@ -187,7 +182,7 @@ anthropogenic_edge*conifer
 conifer*cohesion
 
 ```{r the natural + configuration * dist (H4)}
-core_dist_config_4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
+coredistconfig5 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                      scale(lc_coniferous_750)*scale(anthropogenic_ed_250) +  
                      scale(lc_shrub_750) +
                      scale(lc_grassland_750)  +
@@ -202,7 +197,7 @@ core_dist_config_4 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) 
                      data = data_wide, 
                      family = "binomial")
 
-summary(core_dist_config_4)
+summary(coredistconfig5)
 
 
 ```
@@ -211,6 +206,6 @@ high prop conifer, edge effects smaller !!!!!!!!!!!!!
 
 ```{r model selection}
 
-model.sel(null, core_0, dist_1, config_2, core_dist_config_3, core_dist_config_4)
+model.sel(null0, core1, dist2, config3, coredistconfig4, coredistconfig5)
 
 ```

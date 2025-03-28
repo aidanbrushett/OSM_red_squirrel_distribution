@@ -109,9 +109,11 @@ data_long <- config %>%
 data_long <- data_long %>%
   dplyr::select(site, buff_dist, array, red_squirrel, absent_red_squirrel, harvest,
           seismic, roads, linear, wells, lc_grassland, lc_coniferous, 
-         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
-         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion,          natural_ed, anthropogenic_ed,
          natural_tca, anthropogenic_tca)
+
+data_long$anthropogenic_tca[is.na(data_long$anthropogenic_tca)] <- 0
+data_long$anthropogenic_ed[is.na(data_long$anthropogenic_ed)] <- 0
 
 write.csv(data_long, "data/processed/analysis_df_long.csv")
 ```
@@ -124,7 +126,7 @@ data_wide <- data_long %>%
   dplyr::select(site, buff_dist, red_squirrel, absent_red_squirrel, harvest, seismic, 
         roads, linear, wells, lc_grassland, lc_coniferous, 
          lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
-         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+         natural_ed, anthropogenic_ed,
          natural_tca, anthropogenic_tca) %>% 
 
   # wide data
@@ -132,7 +134,7 @@ data_wide <- data_long %>%
               values_from = c(harvest, seismic, roads, linear, wells, 
          lc_grassland, lc_coniferous, 
          lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
-         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+          natural_ed, anthropogenic_ed,
           natural_tca, anthropogenic_tca)) %>%
   
   # let's re-add the array and camera columns that we previously lost.

@@ -7,12 +7,17 @@ date: "2025-03-25"
 library(MASS)
 library(dplyr)
 library(glmmTMB)
+library(lme4)
 ```
 
 ```{r data for modelling}
 
 # this dataframe is formatted and ready to go
 data_long <- read_csv("data/processed/analysis_df_long.csv")
+
+# remove the weird first column
+
+data_long <- data_long[,-1]
 ```
 
 ## Step selection 
@@ -25,7 +30,7 @@ For the 'core' model (natural features), variables are: conifer forest, broadlea
 ```{r a manual loop to do step wise AIC for the habitat data}
 
 # vector of predictor variables 
-predictors <- c("lc_coniferous", "lc_broadleaf", "lc_mixed", "lc_shrub", "lc_grassland")
+predictors <- c("lc_coniferous", "lc_mixed", "lc_shrub", "lc_grassland")
 
 # empty list to store the results
 model_results_core <- list()
@@ -81,14 +86,57 @@ for (buffer in buff_dist) {
 
 ```
 
+took out broadlead because correlated 
+```{r actual step selection using the dredge function}
 
+# Empty list to store the final model and its AIC for each buffer distance
+aic_results_core <- list()
+
+# Loop over each unique buffer distance
+buff_dist <- unique(data_long$buff_dist)
+
+for (buffer in buff_dist) {
+  
+  # Subset the data based on the current buffer distance
+  subset_data <- data_long[data_long$buff_dist == buffer, ]
+  
+  # Fit the initial model for the current buffer distance
+  model_core <- glmer(cbind(red_squirrel, absent_red_squirrel) ~ 
+                   scale(lc_coniferous) +
+                   scale(lc_mixed) + 
+                   scale(lc_shrub) +
+                   scale(lc_grassland) +
+                   (1|array), 
+                 data = subset_data, 
+                 family = "binomial", 
+                 na.action = na.fail)
+  
+  # Perform stepwise model selection based on AIC
+  stepwise_core <- dredge(model, 
+                           rank = AICc, 
+                           evaluate = TRUE, 
+                           trace = TRUE)
+  
+   # Extract the best model based on AICc (the model with the lowest AICc)
+  best_model <- get.models(stepwise_model, 1)[[1]]
+  
+  # Store the final model and its AIC in the list
+  aic_results_core[[as.character(buffer)]] <- list(
+    model = best_model,
+    aic = AIC(best_model)
+  )
+}
+  
+```
+
+This will create a new dataframe for each buffer size 
 ```{r pull out the buffers}
 
 #  individual dataframes for each buffer
 for (buffer in buff_dist) {
   
   # get the ranked AIC dataframe for this buffer
-  model_aic_df <- model_results_core[[as.character(buffer)]]
+  model_aic_df <- aic_results_core[[as.character(buffer)]]
   
   # assign the dataframe to a variable
   assign(paste0("core_", buffer), model_aic_df)
@@ -97,20 +145,29 @@ for (buffer in buff_dist) {
 ```
 
 
+This will make a dataframe with the top model AIC 
 ```{r make a new dataframe with all the top models for core}
+
+# Function to find the minimum value in a DataFrame (only for numeric columns)
+find_min_value <- function(df) {
+  # Ensure we are working only with numeric columns
+  numeric_cols <- df[sapply(df, is.numeric)]  # Select only numeric columns
+  
+  # Check if numeric_cols has any numeric columns before proceeding
+  if (length(numeric_cols) > 0) {
+    # Flatten the numeric columns into a vector and find the minimum
+    numeric_vector <- unlist(numeric_cols)  # Convert to a vector
+    return(min(numeric_vector, na.rm = TRUE))  # Ignore NA values
+  } else {
+    return(NA)  # Return NA if no numeric columns exist
+  }
+}
 
 # Get all object names in the environment
 all <- ls()
 
 # Filter the objects that start with 'core_'
 core_dataframes <- all[grepl("^core_", all)]
-
-# Function to find the minimum value in a DataFrame (only for numeric columns)
-find_min_value <- function(df) {
-  # Ensure we are working only with numeric columns
-  numeric_cols <- df[sapply(df, is.numeric)]
-  return(min(numeric_cols, na.rm = TRUE))  # Ignore NA values
-}
 
 # Extract the DataFrames using the names and apply the function
 min_values_core <- sapply(core_dataframes, function(name) {
@@ -121,6 +178,7 @@ min_values_core <- sapply(core_dataframes, function(name) {
 # Convert the results into a new DataFrame
 result_core <- data.frame(DataFrame = core_dataframes,
                         Lowest_Value = min_values_core)
+
 
 
 #write.csv(result_core, "data/processed/stepAIC_core.csv")
