@@ -1,5 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: March 21, 2025 11:50:11 AM</msg><msg code="0" type="0">max( Raster(r"HFI_raster_indicator"),  Raster(r"Landcover_raster_indicator"))</msg><msg code="539" type="100">ERROR 000539: Traceback (most recent call last):
-  File "&lt;expression&gt;", line 1, in &lt;module&gt;
-  File "&lt;string&gt;", line 5, in rcexec_DC684390_0C54_4F14_9EBF_B34DF3F2E1B1
-ValueError: The truth value of a raster is ambiguous. Invalid use of raster with Boolean operator or function. Check the use of parentheses where applicable.
-</msg><msg code="-2147467259" type="100">Failed to execute (RasterCalculator).</msg><msg code="0" type="3">Failed at March 21, 2025 11:50:17 AM (Elapsed Time: 5.12 seconds)</msg></messages>
