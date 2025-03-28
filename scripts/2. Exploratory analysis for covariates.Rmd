@@ -51,6 +51,8 @@ summarize <- dplyr::summarize
 ```{r}
 covariates <- read_csv("./data/processed/OSM_all_covariates_2021_2022_2023.csv")
 
+summary(covariates)
+
 response <- read_csv("./data/processed/OSM_proportional_weekly_presence_2021_2022_2023.csv")
 
 setdiff(covariates$site, response$site)
@@ -126,7 +128,7 @@ config_vars <- crossing(feature = c("anthropogenic", "natural"),
 
 data <- data_raw %>%
   
-  select(1:48, config_vars)
+  select(1:48, seismic, pipe_trans, config_vars)
 ```
 
 Let's look at how much variation we have in our metrics from histograms. For now we'll loop through data that is pooled across all 20 buffer sizes. This is a coarse, for-interest-only tool that we can look at when building the candidate model set. 
@@ -179,15 +181,44 @@ writexl::write_xlsx(corr_data, "./data/processed/OSM_all_covariates_correlation.
 # 4. Summary table of covariates
 
 ```{r}
-covariates <- data %>%
+covariate_table <- data %>%
   
   select(36:ncol(.)) %>%
   
-  summarise(across(everything(), list(min_value = min, max_value = max))) %>%
-  pivot_longer(cols = everything(), names_to = c("covariate", ".value"), names_sep = "__")
+  mutate(across(everything(), ~ replace_na(.x, 0))) %>%
+  
+  summarise(
+    across(everything(), list(
+      zmean = ~mean(.),
+      zmin = ~min(.),
+      zmax = ~max(.),
+      zmedian = ~median(.),
+      zq20 = ~quantile(., probs = 0.20),
+      zq80 = ~quantile(., probs = 0.80)
+    ))
+  ) %>%
+        
+  pivot_longer(cols = everything(), names_to = c("Covariate", ".value"), names_sep = "_z") %>%
+  
+  mutate(`Median (20%, 80%)` = paste0(round(median, 2), 
+                                      " (", round(q20, 2), 
+                                      "–", 
+                                      round(q80, 2), ")"),
+         
+         `Mean (min, max)` = paste0(round(mean, 2), 
+                                    " (", round(min, 2), 
+                                    "–", 
+                                    round(max, 2), ")"),
+         ) %>%
+  
+  filter(Covariate != 'trails') %>%
+  
+  select(-mean, -min, -max, -median, -q20, -q80) %>%
+  
+  mutate(Description = "")
 
 
-
+writexl::write_xlsx(covariate_table, "./tables/OSM_all_covariates_summary.xlsx")
   
   
   
