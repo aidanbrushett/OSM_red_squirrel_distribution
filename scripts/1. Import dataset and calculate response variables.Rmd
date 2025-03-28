@@ -34,6 +34,7 @@ Email: [XXXX@uvic.ca](XXXX@uvic.ca)
 rm(list=ls()) # start fresh :)
 
 library(tidyverse)
+library(sf)
 library(ggplot2)
 
 # These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
@@ -48,7 +49,7 @@ summarize <- dplyr::summarize
 # 2. Covariates
 
 ```{r}
-composition <- read_csv("./data/raw/OSM_covariates_grouped_2021_2022_2023.csv") %>%
+composition <- read_csv("./data/raw/OSM_composition_grouped_2021_2022_2023.csv") %>%
   
               mutate(
               site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
@@ -679,3 +680,116 @@ fig_seasonal_det
 ```
 
 It doesn't look too too variable to be quite honest, I think that we are likely not introducing any crazy bias into our data by using a proportional response with variable months among arrays/sites. The coolest thing to see is the huge difference in detections per site. 
+
+# 5. Summary statistics
+
+## 5.1. Cameras and camera-trap survey effort
+
+```{r}
+n_camera_days <- operating %>%
+  
+  group_by(array, site) %>%
+  
+  summarize(camera_days = n()) %>%
+  
+  # Any cams with <4 days of data were inevitably filtered out. 
+  # For now we have no filters applied based on the number of weeks. 
+  filter(camera_days >= 4) 
+
+sum(n_camera_days$camera_days)
+sd(n_camera_days$camera_days)
+mean(n_camera_days$camera_days)
+min(n_camera_days$camera_days)
+max(n_camera_days$camera_days)
+
+
+
+n_cameras <- n_camera_days %>%
+  
+  group_by(array) %>%
+  
+  summarize(cams = n())
+
+sum(n_cameras$cams)
+min(n_cameras$cams)
+max(n_cameras$cams)
+mean(n_cameras$cams)
+
+```
+
+## 5.2. Number of images
+
+```{r}
+osm_image <- list.files(path="./data/raw/", 
+                               pattern="OSM_timelapse", 
+                               full.names = TRUE) %>%
+      map_dfr(.,
+          ~read_csv(.x,
+                   col_types = cols(datetime = col_character(), # we will fix this later
+                                    site = col_character(),
+                                    total = col_integer(),
+                                    group_count = col_integer(), 
+                                    comments = col_character(),
+                                    species = col_factor(),
+                                    otherspecify = col_character(),
+                                    snow = col_factor(),
+                                    empty = col_logical())
+          ) %>%
+
+            set_names(tolower(names(.))) %>%
+            
+            select(-array, -camera) %>%
+            
+            # Remove "Z" and "T" to brute force the timestamps
+            mutate(datetime = datetime %>% str_replace_all("Z", "") %>% str_replace_all("T", " "),
+                   datetime = as_datetime(datetime),
+                   datasource = paste0(.x),
+                   year = year(datetime), 
+                   month = month(datetime),
+                   day = day(datetime)) %>%
+            
+            mutate(
+              site = gsub("-", "_", site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .) %>% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %>%
+            
+            # Create some extra columns
+            separate_wider_delim(site,
+                                 delim = '_',
+                                 names = c('array', 'camera'),
+                                 cols_remove = FALSE) %>% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              ) %>%
+            
+            select(file, relativepath, array, camera, site, snow, datetime, 
+                   year, month, day, classifier, species, total, group_count, comments, 
+                   empty, datasource, cameramalfunction) 
+          )
+
+osm_image %>%
+  
+  filter(species == "Red squirrel",
+         empty == FALSE) %>%
+  nrow(.)
+
+
+n_indet <- indet %>%
+  
+  group_by(species) %>%
+  
+  summarize(detections = n())
+  
+```
+
+
+
+
+
+

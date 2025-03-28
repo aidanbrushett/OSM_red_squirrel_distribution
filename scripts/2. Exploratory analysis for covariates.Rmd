@@ -98,28 +98,31 @@ For a few specific feature types of interest:
 
 ```{r}
 # Some metrics we want for basically all of the feature types
-feature_config <- c("anthropogenic", "natural", "coniferous_forest", "broadleaf_forest", 
-                    "mixed_forest", "grassland", "shrubland", "seismic_lines", 
-                    "seismic_lines_3d", "pipeline", "transmission_lines", "wells", 
-                    "harvest", "roads", "osm_industrial")
-metric_config <- c("np", "pd", "area_mn", "lpi", "ed")
+#feature_config <- c("anthropogenic", "natural", "coniferous_forest", "broadleaf_forest", 
+#                    "mixed_forest", "grassland", "shrubland", "seismic_lines", 
+#                    "seismic_lines_3d", "pipeline", "transmission_lines", "wells", 
+#                    "harvest", "roads", "osm_industrial")
+#metric_config <- c("np", "pd", "area_mn", "lpi", "ed")
 
-config <- crossing(feature = feature_config, metric = metric_config) %>%
-  mutate(name = str_c(feature, metric, sep = "_")) %>%
-  pull(name)
+#config <- crossing(feature = feature_config, metric = metric_config) %>%
+#  mutate(name = str_c(feature, metric, sep = "_")) %>%
+#  pull(name)
 
 # Some metrics we want for a subset of the feature types
-feature_config_partial <- c("anthropogenic", "natural", "coniferous_forest", "broadleaf_forest", 
-                           "mixed_forest", "grassland", "shrubland")
-metric_config_partial <- c("tca", "core_mn", "cohesion")
-
-config_partial <- crossing(feature = feature_config_partial, metric = metric_config_partial) %>%
-  mutate(name = str_c(feature, metric, sep = "_")) %>%
-  pull(name)
+#feature_config_partial <- c("anthropogenic", "natural", "coniferous_forest", "broadleaf_forest", 
+#                           "mixed_forest", "grassland", "shrubland")
+#metric_config_partial <- c("tca", "core_mn", "cohesion")
 
 # Collect them all into one list that we can input to 'select'
-config_vars <- c(config, config_partial)
+#config_vars <- c(config, config_partial)
 
+# Some metrics we want for a subset of the feature types
+config_vars <- crossing(feature = c("anthropogenic", "natural"), 
+                        metric = c("tca", "ed", "cohesion")) %>%
+  
+  mutate(name = str_c(feature, metric, sep = "_")) %>%
+  
+  pull(name)
 
 data <- data_raw %>%
   
@@ -172,5 +175,43 @@ corr_data <- purrr::map(buffers,
 
 writexl::write_xlsx(corr_data, "./data/processed/OSM_all_covariates_correlation.xlsx")
 ```
+
+# 4. Summary table of covariates
+
+```{r}
+covariates <- data %>%
+  
+  select(36:ncol(.)) %>%
+  
+  summarise(across(everything(), list(min_value = min, max_value = max))) %>%
+  pivot_longer(cols = everything(), names_to = c("covariate", ".value"), names_sep = "__")
+
+
+
+  
+  
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
