@@ -6,12 +6,13 @@ date: "2025-03-25"
 ```{r libraries}
 library(MASS)
 library(dplyr)
+library(glmmTMB)
 ```
 
 ```{r data for modelling}
 
 # this dataframe is formatted and ready to go
-data_long <- read_csv("data/processed/analysis_df.csv")
+data_long <- read_csv("data/processed/analysis_df_long.csv")
 ```
 
 ## Step selection 
@@ -131,6 +132,7 @@ The 750 meter scale is the best for the core model by 18 AIC.
 Best model: lc_coniferous + lc_broadleaf + lc_shrub + lc_grassland
 
 
+
 For the 'disturbance' model (anthropogenic features), variables are: seismic lines, linear (transmission and pipelines), roads, harvest blocks, well pads, and industrial features. 
 
 ```{r a manual loop to do step wise AIC for the disturbance data}
@@ -207,7 +209,7 @@ for (buffer in buff_dist) {
 
 ```
 
-```{r make a new dataframe with all the top models for core}
+```{r make a new dataframe with all the top models for dist}
 
 # Get all object names in the environment
 all <- ls()
@@ -240,3 +242,106 @@ result_dist <- data.frame(DataFrame = dist_dataframes,
 The 2000 meter scale is the best for the disturbance model by 5.8 AIC. 
 
 Best model: harvest + linear + wells + roads + seismic (osm_industrial is an uninformative prior)
+
+
+```{r a manual loop to do step wise AIC for the configuration data}
+
+# predictor variables 
+predictors <- c("natural_cohesion", "anthropogenic_cohesion", "natural_tca", "anthropogenic_tca", "natural_ed", "anthropogenic_ed")
+
+# empty list to store the results
+model_results_conf <- list()
+
+# Loop over each unique buffer distance 
+buff_dist <- unique(data_long$buff_dist)
+
+for (buffer in buff_dist) {
+  
+  # Subset the data based on the current buffer distance
+  subset_data <- data_long[data_long$buff_dist == buffer, ]
+  
+  # all possible combinations of predictors (31 different combos for core variables)
+  model_combinations <- unlist(lapply(1:length(predictors), 
+                                      function(i) combn(predictors, i, 
+                                      simplify = FALSE)), recursive = FALSE)
+  
+  # create an empty list to store the models and their AICs
+  models <- list()
+  
+  # loop through each combination of variables and fit the model
+  for (combo in model_combinations) {
+    
+    # Create the formula for the current combination of predictors
+    formula <- as.formula(paste("cbind(red_squirrel, absent_red_squirrel) ~", 
+                                paste(combo, collapse = " + "), "+ (1 | array)"))
+    
+    # fit the model with the current formula
+    model <- tryCatch({
+      glmmTMB(formula, data = subset_data, family = "binomial")
+    }
+    )
+    
+    # store the model and AIC
+    if (!is.null(model)) {
+      models[[paste(combo, collapse = "_")]] <- AIC(model)
+    }
+  }
+  
+  # dataframe with the model names andAICs
+  model_aic_df <- data.frame(
+    model = names(models),
+    AIC = unlist(models)
+  )
+  
+  # Rank the models by AIC
+  model_aic_df <- model_aic_df %>% 
+    arrange(AIC)
+  
+  # Store the ranked models in the results list
+  model_results_conf[[as.character(buffer)]] <- model_aic_df
+}
+```
+
+
+```{r pull out the buffers}
+
+#  individual dataframes for each buffer
+for (buffer in buff_dist) {
+  
+  # get the ranked AIC dataframe for this buffer
+  model_aic_df <- model_results_conf[[as.character(buffer)]]
+  
+  # assign the dataframe to a variable
+  assign(paste0("conf_", buffer), model_aic_df)
+}
+
+```
+
+```{r make a new dataframe with all the top models for config}
+
+# Get all object names in the environment
+all <- ls()
+
+# Filter the objects that start with 'core_'
+conf_dataframes <- all[grepl("^conf_", all)]
+
+# Function to find the minimum value in a DataFrame (only for numeric columns)
+find_min_value <- function(df) {
+  # Ensure we are working only with numeric columns
+  numeric_cols <- df[sapply(df, is.numeric)]
+  return(min(numeric_cols, na.rm = TRUE))  # Ignore NA values
+}
+
+# Extract the DataFrames using the names and apply the function
+min_values_conf <- sapply(conf_dataframes, function(name) {
+  df <- get(name)  # Fetch the DataFrame by name
+  find_min_value(df)
+})
+
+# Convert the results into a new DataFrame
+result_conf <- data.frame(DataFrame = conf_dataframes,
+                        Lowest_Value = min_values_conf)
+
+write.csv(result_conf, "data/processed/stepAIC_conf.csv")
+
+```

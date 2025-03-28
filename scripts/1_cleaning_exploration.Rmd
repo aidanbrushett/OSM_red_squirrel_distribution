@@ -32,7 +32,6 @@ dets <- dets %>%
 dets <- dets %>%
   filter(array != "CL") %>%
   filter(array != "WF")
-  
 
 str(dets)
 summary(dets)
@@ -42,8 +41,10 @@ length(unique(dets$site))
 
 # there should be 10 arrays 
 levels(dets$array)
+```
 
-# covariate data 
+```{r covariate data}
+
 covs <- read_csv("data/raw/OSM_composition_grouped_2021_2022_2023.csv")
 
 str(covs)
@@ -51,7 +52,15 @@ summary(covs)
 
 length(unique(covs$site))
 
-# all reading in ok
+```
+
+```{r configuration data}
+
+config <- read_csv("data/raw/OSM_configuration_simplified_2021_2022_2023.csv")
+
+# rename the buffer column
+config <- config %>%
+  rename("buff_dist" = "buffer")
 
 ```
 
@@ -87,33 +96,46 @@ covs <- covs %>%
 ```
 
 
-```{r long and wide dataframes}
+```{r long dataframe}
 
 data_long <- dets %>%
   left_join(covs, by = "site")
 
 length(unique(data_long$buff_dist))
 
-#write.csv(data_long, "data/processed/analysis_df.csv")
+data_long <- config %>%
+  left_join(data_long, by = c("site", "buff_dist"))
 
+data_long <- data_long %>%
+  dplyr::select(site, buff_dist, array, red_squirrel, absent_red_squirrel, harvest,
+          seismic, roads, linear, wells, lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
+         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+         natural_tca, anthropogenic_tca)
 
+write.csv(data_long, "data/processed/analysis_df_long.csv")
+```
+
+```{r wide dataframe}
 data_wide <- data_long %>%
 
   # pivot wider was not collapsing the data very well with the camera and array variables present. 
   # let's remove them first. 
   dplyr::select(site, buff_dist, red_squirrel, absent_red_squirrel, harvest, seismic, 
-                roads, linear, wells, 
-         lc_grassland, lc_coniferous, 
-         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial) %>% 
+        roads, linear, wells, lc_grassland, lc_coniferous, 
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
+         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+         natural_tca, anthropogenic_tca) %>% 
 
   # wide data
   pivot_wider(names_from = buff_dist,
               values_from = c(harvest, seismic, roads, linear, wells, 
          lc_grassland, lc_coniferous, 
-         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial)) %>%
+         lc_broadleaf, lc_mixed, lc_shrub, osm_industrial, natural_cohesion, 
+         anthropogenic_cohesion, natural_ed, anthropogenic_ed,
+          natural_tca, anthropogenic_tca)) %>%
   
   # let's re-add the array and camera columns that we previously lost.
-  # this code is redundant but seems to help `pivot_wider` do its job. 
   separate_wider_delim(site,
                        delim = '_',
                        names = c('array',
@@ -126,9 +148,12 @@ data_wide <- data_long %>%
 
 
 str(data_wide)
+
+write.csv(data_wide, "data/processed/analysis_df_wide.csv")
 ```
 
 We now have a 'long format' dataframe that we will use for step AIC
+
 
 Now lets create a list with all the covariates for each scale. This code was taken from Marissa's OSM analysis. 
 
@@ -188,7 +213,9 @@ squirrel <- buffer_frames %>%
       left_join(dets,
                 by = 'site') %>%
       
-      dplyr::select(array, everything()))
+      dplyr::select(array, everything()) %>%
+      dplyr::select(red_squirrel, everything()) %>%
+      dplyr::select(absent_red_squirrel, everything()))
 
 ```
 
@@ -330,21 +357,32 @@ No clear top model:
 
 ```{r correlation at all buffer sizes}
 
-squirrel %>% 
-  
-  purrr::map(
-    ~.x %>% 
-      
-      # select only columns with covarites not other info
-      select(harvest:osm_industrial) %>% 
+squirrel$'2000 meter buffer' %>%
+      dplyr::select(harvest:linear) %>% 
       
       # use chart.correlation 
       chart.Correlation(.,
                       histogram = TRUE, 
                        method = "pearson")
-  )
+  
   
 ```
+
+
+```{r}
+
+config_cor <- data_long[data_long$buff_dist == 250, ]
+
+
+config_cor %>%
+      dplyr::select(harvest:anthropogenic_tca) %>% 
+     
+ chart.Correlation(.,
+                      histogram = TRUE, 
+                       method = "pearson")
+      
+```
+
 
 # 2. Explore the independent variables 
 ```{r}
@@ -372,10 +410,4 @@ squirrel_cor %>%
 hist(squirrel$red_squirrel)
 hist(squirrel$absent_red_squirrel)
 ```
-
-
-Format the wide data
-
-```{r wide dataframe for modelling}
-
 
