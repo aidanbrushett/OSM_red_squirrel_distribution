@@ -112,13 +112,13 @@ for (buffer in buff_dist) {
                  na.action = na.fail)
   
   # Perform stepwise model selection based on AIC
-  stepwise_core <- dredge(model, 
-                           rank = AICc, 
+  stepwise_core <- dredge(model_core, 
+                           rank = AIC, 
                            evaluate = TRUE, 
                            trace = TRUE)
   
    # Extract the best model based on AICc (the model with the lowest AICc)
-  best_model <- get.models(stepwise_model, 1)[[1]]
+  best_model <- get.models(stepwise_core, 1)[[1]]
   
   # Store the final model and its AIC in the list
   aic_results_core[[as.character(buffer)]] <- list(
@@ -136,7 +136,7 @@ This will create a new dataframe for each buffer size
 for (buffer in buff_dist) {
   
   # get the ranked AIC dataframe for this buffer
-  model_aic_df <- aic_results_core[[as.character(buffer)]]
+  model_aic_df <- model_results_core[[as.character(buffer)]]
   
   # assign the dataframe to a variable
   assign(paste0("core_", buffer), model_aic_df)
