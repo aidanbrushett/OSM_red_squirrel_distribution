@@ -11,9 +11,17 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE)
+                      message = FALSE,
+                      eval = FALSE)
 ```
 
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+# 0. Setup
 
 ```{r}
 library(tidyverse)
@@ -23,18 +31,37 @@ library(landscapemetrics)
 
 rm(list = ls())
 ```
+# 1. Read in the data
+
+Rasters we want: 
 
 ```{r}
-configuration <- rast("./rasters/OSM_landcover_HFI_simplified.tif")
-plot(configuration)
+configuration_binary <- rast("./rasters/OSM_landcover_HFI_binary.tif")
+plot(configuration_binary)
 
-configuration_full <- rast("./rasters/OSM_landcover_HFI_grouped.tif")
-plot(configuration_full)
+configuration_simplified <- rast("./rasters/OSM_landcover_HFI_simplified.tif")
+plot(configuration_simplified)
 
+configuration_grouped <- rast("./rasters/OSM_landcover_HFI_grouped.tif")
+plot(configuration_grouped)
+```
 
-feature_types <- read_csv("./rasters/OSM_landcover_HFI_feature_types.csv") %>%
+Classification schemes that tell us which landcover type each raster value corresponds to (I made this manually while I was processing the rasters):
+
+```{r}
+features_grouped <- read_csv("./rasters/OSM_landcover_HFI_feature_types.csv") %>%
   
-  select(feature_new, class = value_new) %>%
+  select(feature = feature_grouped2, class = value_grouped2) %>%
+  
+  mutate(class = as.character(class)) %>%
+  
+  distinct()
+
+
+
+features_simplified <- read_csv("./rasters/OSM_landcover_HFI_feature_types.csv") %>%
+  
+  select(feature = feature_simplified, class = value_simplified) %>%
   
   mutate(class = as.character(class)) %>%
   
@@ -44,6 +71,8 @@ feature_types <- read_csv("./rasters/OSM_landcover_HFI_feature_types.csv") %>%
 #check_landscape(configuration)
 ```
 
+The sites for which we are going to extract covariates:
+
 ```{r}
 sites <- st_read("./maps/OSM_mapping.gdb", layer = "all_arrays_locations_covariates") %>%
   
@@ -52,18 +81,26 @@ sites <- st_read("./maps/OSM_mapping.gdb", layer = "all_arrays_locations_covaria
 plot(sites[1])
 ```
 
-```{r Extract landscapemetrics - raster w/ SIMPLIFIED landcover classes}
+
+
+# 2. Extract landscape covariates for the BINARY landcover raster
+
+## 2.1. Extract values
+
+```{r Extract landscapemetrics - raster w/ BINARY landcover classes}
 # Create a buffer of 5500m around the site
 # Convert the buffer to a SpatVector for use with terra
 # Extract the raster values within the buffer
 
 config_data <- list()
 
+start_time <- Sys.time()
+
 for(i in 1:nrow(sites)){
   
   site <- sites[i,]
   
-  config_local <- crop(configuration,
+  config_local <- crop(configuration_binary,
                      vect(st_buffer(site, 
                                     dist = 5500)))
   
@@ -73,7 +110,9 @@ for(i in 1:nrow(sites)){
 
   for (size in seq(250, 5000, by = 250)) {
     
-    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer )")
+    progress <- ((i - 1) * 20 + size/250) / (20*nrow(sites))
+
+    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer ):", round(as.numeric(difftime(Sys.time(), start_time, units = "hours")), 4) * (1 - progress) / progress, "hours remaining    ")
     
     output <- sample_lsm(config_local, y = site, 
              # Create the buffer and sizes of buffer (we made a loop for size above)
@@ -89,7 +128,8 @@ for(i in 1:nrow(sites)){
                       "lsm_c_split", # Splitting index (number of patches if all patches were divided into equal-sized patches -- i.e. the effective number of patches. Accounts for patch size distribution)
                       "lsm_l_split", # Landscape scale splitting index
                       "lsm_c_ed", # EDGE DENSITY (EDGE LENGTH IN METERS)
-                      "lsm_c_cohesion" # COHESION (characterizes connectedness of patches -- aggregated or isolated?)
+                      "lsm_c_cohesion", # COHESION (characterizes connectedness of patches -- aggregated or isolated?)
+                      "lsm_c_cai_mn" # MEAN CORE AREA INDEX of a class: measures mean ratio of core to edge habitat in patches (CAI = 0 when the patch has no core area and approaches CAI = 100 with increasing percentage of core area within a patch.)
                       ), 
              # Directions set to queen's case (8)
              directions = 8,
@@ -114,9 +154,115 @@ for(i in 1:nrow(sites)){
              class = as.character(class) %>% replace_na(., "LANDSCAPE"),
              class = case_when(class == "0" ~ "WATER",
                                class == "1" ~ "NATURAL",
-                               class == "2" ~ "ANTHROPOGENIC",
+                               class == "2" ~ "ANTHRO",
                                TRUE ~ class)
                                ) %>%
+      
+      select(-id, -layer)
+    
+    gc()
+    
+  }
+  
+  config_data[[site$site]] <- bind_rows(config_data_lu)
+  
+}
+
+save(config_data, file = "./data/raw/configuration_metrics_binary.RData")
+```
+
+## 2.2. Manipulate covariates into tidy format
+
+```{r}
+load("./data/raw/configuration_metrics_binary.RData")
+
+config_binary <- config_data %>%
+  
+  bind_rows(.) %>%
+  
+  filter(!(level == 'class' & class == "LANDSCAPE")) %>%
+  
+  mutate(covariate = paste0(tolower(class), "_", metric),
+         site = plot_id) %>%
+  
+  select(-metric, -level, -class, -percentage_inside, -plot_id) %>%
+  
+  pivot_wider(names_from = covariate,
+              values_from = value)
+
+write_csv(config_binary, "./data/raw/OSM_configuration_binary_2021_2022_2023.csv")
+```
+
+
+
+# 3. Extract landscape covariates for the SIMPLIFIED landcover raster (forest, nonforest, veg anthro, and nonveg anthro)
+
+## 3.1. 
+
+```{r Extract landscapemetrics - raster w/ OSM simplified landcover classes}
+
+config_data <- list()
+
+start_time <- Sys.time()
+
+for(i in 1:nrow(sites)){
+  
+  site <- sites[i,]
+  
+  # Create a buffer of 5500m around the site
+  # Convert the buffer to a SpatVector for use with terra
+  # Extract the raster values within the buffer
+  config_local <- crop(configuration_simplified,
+                     vect(st_buffer(site, 
+                                    dist = 5500)))
+  
+  #plot(config_local)
+  
+  config_data_lu <- list()
+
+  for (size in seq(250, 5000, by = 250)) {
+    
+    progress <- ((i - 1) * 20 + size/250) / (20*nrow(sites))
+
+    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer ):", round(as.numeric(difftime(Sys.time(), start_time, units = "hours")), 4) * (1 - progress) / progress, "hours remaining    ")
+    
+    output <- sample_lsm(config_local, y = site, 
+             # Create the buffer and sizes of buffer (we made a loop for size above)
+             shape = "circle", size = size, 
+             # Calculations we would like to extract
+             what = c("lsm_c_np", # NUMBER OF PATCHES
+                      #"lsm_c_pland", # PERCENT LAND (composition)
+                      "lsm_c_pd", # PATCH DENSITY number of patches per 100 Ha
+                      "lsm_c_area_mn", # MEAN OF PATCH AREA (mean area of all patches -- e.g. many small patches or few large ones?)
+                      "lsm_c_lpi", # LARGEST PATCH INDEX (percent of landscape covered by the largest patch of each class -- measure of dominance)
+                      "lsm_c_tca", # TOTAL CORE AREA (sum of core areas of all patches)
+                      "lsm_c_core_mn", # MEAN CORE AREA (of core areas of all patches)
+                      "lsm_c_split", # Splitting index (number of patches if all patches were divided into equal-sized patches -- i.e. the effective number of patches. Accounts for patch size distribution)
+                      "lsm_l_split", # Landscape scale splitting index
+                      "lsm_c_ed", # EDGE DENSITY (EDGE LENGTH IN METERS)
+                      "lsm_c_cohesion", # COHESION (characterizes connectedness of patches -- aggregated or isolated?)
+                      "lsm_c_cai_mn" # MEAN CORE AREA INDEX of a class: measures mean ratio of core to edge habitat in patches (CAI = 0 when the patch has no core area and approaches CAI = 100 with increasing percentage of core area within a patch.)
+                      ), 
+             # Directions set to queen's case (8)
+             directions = 8,
+             # Number of pixels considered to be edge
+             edge_depth = 4, # a 20 meter edge depth, in line with literature
+             # If cells ONLY neighbour the landscape boundary, count as core
+             consider_boundary = TRUE, 
+             # Returns NA for classes not present in sample plots
+             all_classes = TRUE,
+             # Matches up the buffer with the site, very important
+             plot_id = site$site,
+             # Print warning messages
+             verbose = TRUE, 
+             # Print progress report
+             progress = FALSE,
+             # Do not return the clipped raster
+             return_raster = FALSE)
+    
+    config_data_lu[[as.character(size)]] <- output %>%
+  
+        mutate(buffer = size) %>%
       
       select(-id, -layer)
     
@@ -131,6 +277,41 @@ for(i in 1:nrow(sites)){
 save(config_data, file = "./data/raw/configuration_metrics_simplified.RData")
 ```
 
+## 3.2. Manipulate covariates into tidy format
+
+```{r}
+load("./data/raw/configuration_metrics_simplified.RData")
+
+config_simplified <- config_data %>%
+  
+  bind_rows(.) %>%
+  
+  # landscape scale metrics (e.g. splitting index have an NA that we want to replace)
+  mutate(class = ifelse(level == "landscape", "landscape", as.character(class))) %>%
+  
+  drop_na(class) %>%
+  
+  left_join(features_simplified, by = 'class') %>%
+  
+  mutate(class = tolower(feature) %>%
+           replace_na(., "landscape")) %>%
+  
+  mutate(covariate = paste0(tolower(class), "_", metric),
+         site = plot_id) %>%
+  
+  select(-metric, -level, -class, -percentage_inside, -plot_id, -feature) %>%
+  
+  pivot_wider(names_from = covariate,
+              values_from = value)
+
+write_csv(config_simplified, "./data/raw/OSM_configuration_simplified_2021_2022_2023.csv")
+```
+
+
+# 4. Extract landscape covariates for the FULL CLASSES ('grouped') landcover raster
+
+## 4.1. Extract values
+
 ```{r Extract landscapemetrics - raster w/ OSM grouped landcover classes}
 
 config_data <- list()
@@ -144,7 +325,7 @@ for(i in 1:nrow(sites)){
   # Create a buffer of 5500m around the site
   # Convert the buffer to a SpatVector for use with terra
   # Extract the raster values within the buffer
-  config_local <- crop(configuration_full,
+  config_local <- crop(configuration_grouped,
                      vect(st_buffer(site, 
                                     dist = 5500)))
   
@@ -208,27 +389,7 @@ for(i in 1:nrow(sites)){
 save(config_data, file = "./data/raw/configuration_metrics_grouped.RData")
 ```
 
-```{r}
-load("./data/raw/configuration_metrics_simplified.RData")
-
-config_simplified <- config_data %>%
-  
-  bind_rows(.) %>%
-  
-  filter(!(level == 'class' & class == "LANDSCAPE")) %>%
-  
-  mutate(covariate = paste0(tolower(class), "_", metric),
-         site = plot_id) %>%
-  
-  select(-metric, -level, -class, -percentage_inside, -plot_id) %>%
-  
-  pivot_wider(names_from = covariate,
-              values_from = value)
-
-write_csv(config_simplified, "./data/raw/OSM_configuration_simplified_2021_2022_2023.csv")
-```
-
-
+## 4.2. Manipulate covariates into tidy format
 
 ```{r}
 load("./data/raw/configuration_metrics_grouped.RData")
@@ -242,19 +403,18 @@ config_grouped <- config_data %>%
   
   drop_na(class) %>%
   
-  left_join(feature_types, by = 'class') %>%
+  left_join(features_grouped, by = 'class') %>%
   
-  mutate(class = tolower(feature_new) %>%
+  mutate(class = tolower(feature) %>%
            replace_na(., "landscape")) %>%
   
   mutate(covariate = paste0(tolower(class), "_", metric),
          site = plot_id) %>%
   
-  select(-metric, -level, -class, -percentage_inside, -plot_id, -feature_new) %>%
+  select(-metric, -level, -class, -percentage_inside, -plot_id, -feature) %>%
   
   pivot_wider(names_from = covariate,
               values_from = value)
 
 write_csv(config_grouped, "./data/raw/OSM_configuration_grouped_2021_2022_2023.csv")
 ```
-
