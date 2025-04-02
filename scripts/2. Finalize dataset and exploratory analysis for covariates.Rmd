@@ -229,6 +229,8 @@ writexl::write_xlsx(corr_data, "./data/processed/OSM_all_covariates_correlation.
 
 # 4. Summary table of covariates
 
+This will need to be tweaked at the end of the process to include all variables **at the appropriate spatial scales corresponding to the top results from the dredge**. 
+
 ```{r message=FALSE, warning=FALSE}
 covariate_table <- data %>%
   

@@ -506,7 +506,7 @@ This is a good proxy for overall density of a species across each landscape.
 ```{r}
 fig_month_det <- presence_months %>%
   
-  filter(species %in% c('lynx', 'coyote', 'red squirrel')) %>%
+  filter(species %in% c('red squirrel')) %>%
   
   group_by(array, species) %>%
   
@@ -534,6 +534,8 @@ fig_month_det <- presence_months %>%
     scale_y_continuous(expand = expansion(mult = c(0, 0.05)))  # Remove bottom space, keep small top space
 
 fig_month_det
+
+ggsave("./figures/red_squirrel_monthly_detection_rate.png", width = 5, height = 4)
 ```
 
 ## 4.2. Weekly detections per site/array
@@ -543,7 +545,7 @@ This is a good proxy for overall density of a species across each landscape. Let
 ```{r}
 fig_week_det <- presence_weeks %>%
   
-  filter(species %in% c('lynx', 'coyote', 'red squirrel')) %>%
+  filter(species %in% c('red squirrel')) %>%
   
   group_by(array, species) %>%
   
@@ -578,7 +580,7 @@ fig_week_det
 ```{r}
 fig_occ_total <- presence_months %>%
   
-  filter(species %in% c('lynx', 'coyote', 'red squirrel')) %>%
+  filter(species %in% c('red squirrel')) %>%
   
 #  filter(species %in% c('red squirrel')) %>%
   
@@ -619,7 +621,25 @@ fig_occ_total <- presence_months %>%
 
 fig_occ_total
   
+ggsave("./figures/red_squirrel_naive_occupancy.png", width = 5, height = 4)
 ```
+Total naive occupancy for the study area:
+
+```{r}
+presence_months %>%
+
+  filter(species %in% c('red squirrel')) %>%
+
+  group_by(site) %>%
+  
+  summarize(presence = max(presence)) %>%
+  
+  summarize(n_sites = n(),
+            n_occ = sum(presence))
+
+305/430
+```
+
 
 ## 4.3. Temporal variation in detections
 

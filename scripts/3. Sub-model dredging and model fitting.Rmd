@@ -738,7 +738,7 @@ m_nat_compXconfig_2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel)
 Let's gather all the models into a list and perform model selection:
 
 ```{r}
-#rm(m_nat_compXconfig_2)
+rm(m_nat_compXconfig_1)
 
 models <- mget(ls(pattern = "m_"))
 
@@ -891,6 +891,37 @@ ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
 
 ggsave("./figures/top_model_conifer.png", dpi=400, width = 6, height = 4)
 ```
+
+
+# And for harvest
+```{r, eval=TRUE}
+ggeffects::ggpredict(top_model, terms = c("harvest [all]")) %>%
+                                                                          
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+  
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'forestgreen') +
+  
+    labs(x = "proportion harvesting", 
+         y = "squirrel occurrence frequency") +
+      
+    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank()) + 
+      
+    add_phylopic(
+      uuid = get_uuid(name = "Sciurus vulgaris"),
+      x = 0.1,
+      y = 0.42, 
+      height = 0.06
+      )
+
+ggsave("./figures/top_model_harvest.png", dpi=400, width = 6, height = 4)
+```
+
 
 ## 5.7. Plot conditional effects for a fixed effect of interest **with** an interaction
 
