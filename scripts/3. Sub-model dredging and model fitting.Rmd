@@ -92,7 +92,7 @@ natural_results <- purrr::map_dfr(seq(250, 5000, by = 250), ~{
   model_natural <- glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~ 
                            lc_coniferous +
                            lc_mixed + 
-                           lc_shrub +
+                           #lc_shrub +
                            lc_grassland +
                            #(1|site) + 
                            (1|array), 
@@ -143,10 +143,13 @@ natural_predictors
 natural_buffer
 ```
 
+The 750 meter spatial scale is best for natural variables. 
 
 ## 3.2. 'COMP' sub-model
 
 For the 'disturbance' model (anthropogenic features), variables are: seismic lines, linear (transmission and pipelines), roads, harvest blocks, well pads, and industrial features. 
+
+We need to remove roads or well because they are highly correlated. 
 
 ```{r dredge comp, message=FALSE, warning=FALSE, paged.print=TRUE}
 comp_results <- purrr::map_dfr(seq(250, 5000, by = 250), ~{
@@ -219,10 +222,6 @@ comp_buffer
 The 2000 meter scale is the best for the disturbance model by 5.8 AIC. 
 
 Best model: harvest + linear + wells + roads + seismic (osm_industrial is not a supported covariate)
-
-
-
-
 
 
 ## 3.3. 'CONFIG' sub-model
@@ -413,7 +412,7 @@ config_scale <- purrr::map(seq(250, 5000, by = 250), ~{
 ```
 
 Let's put it all together into a plot:
-
+** not technically thre global model but the best fitting submodel
 ```{r}
 fig_scale <- bind_rows(natural_scale, 
                               comp_scale,
@@ -564,7 +563,7 @@ m_nat <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                             
                             # Natural vars
                             lc_coniferous + 
-                            lc_shrub +
+                            #lc_shrub +
                             lc_grassland +
                             lc_mixed + 
                             
@@ -588,7 +587,7 @@ m_nat_comp <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                                  
                                  # natural vars
                                  lc_coniferous + 
-                                 lc_shrub +
+                                 #lc_shrub +
                                  lc_grassland +
                                  lc_mixed + 
                                  
@@ -617,7 +616,7 @@ m_nat_config <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                                  
                                   # natural vars
                                   lc_coniferous + 
-                                  lc_shrub +
+                                  #lc_shrub +
                                   lc_grassland +
                                   lc_mixed + 
                                  
@@ -638,7 +637,7 @@ m_nat_comp_config <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
                                  
                                  # natural vars
                                  lc_coniferous + 
-                                 lc_shrub +
+                                 #lc_shrub +
                                  lc_grassland +
                                  lc_mixed + 
                                  
@@ -656,7 +655,9 @@ m_nat_comp_config <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel) ~
 ```
 
 
-We'll also make our final hypotheses here by adding a couple interactions to that model. 
+We'll also make our final hypotheses here by adding a couple interactions to that model.
+Lets try all anthro edges as one variable and run that in an interaction model. 
+
 
 ```{r}
 # Interaction model 1: do edge effects depend on conifer availability?
@@ -664,7 +665,7 @@ m_nat_compXconfig_1 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel)
                                  
                                  # natural vars
                                  lc_coniferous + 
-                                 lc_shrub +
+                                 #lc_shrub +
                                  lc_grassland +
                                  lc_mixed + 
                                  
@@ -688,7 +689,7 @@ m_nat_compXconfig_2 <- glmmTMB::glmmTMB(cbind(red_squirrel, absent_red_squirrel)
                                  
                                  # natural vars
                                  lc_coniferous + 
-                                 lc_shrub +
+                                 #lc_shrub +
                                  lc_grassland +
                                  lc_mixed + 
                                  
