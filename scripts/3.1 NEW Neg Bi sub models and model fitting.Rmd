@@ -118,11 +118,15 @@ for (buffer in buff_dist) {
   natural_trees[[as.character(buffer)]] <- model_trees
 }
 
-natural_tree_model <- model_trees %>%
-  set_names(as.character(seq(250, 5000, by = 250))) %>%   
-  MuMIn::model.sel(.) %>%                                 
-  mutate(buffer = as.numeric(rownames(.)),                
-         submodel = "NATURAL_cover") 
+# Perform model selection using model.sel
+natural_tree_model <- MuMIn::model.sel(natural_trees)
+
+## print in console because the dataframe is not working?????????????
+
+# Add buffer and submodel columns to the selection results
+natural_tree_model <- natural_tree_model %>%
+  mutate(buffer = as.numeric(rownames(natural_tree_model)),
+         submodel = "NATURAL_trees")
 ```
 
 'NATURAL' sub-model 2: cover types
