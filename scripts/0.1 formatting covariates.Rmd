@@ -1,0 +1,102 @@
+---
+title: "covariate formatting"
+output: html_document
+date: "2025-04-03"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(tidyr)
+```
+
+
+We want to separate active and abandoned well, as well as format some of the non AMBI covariate data. 
+
+
+```{r load data and have a look at column names}
+
+hfi_2022 <- read_csv("data/raw/raw_covs/OSM_LU01_LU13_LU15_LU21_HFI_2022_2024-04-19.csv")
+names(hfi_2022)
+
+veg_2022 <- read_csv("data/raw/raw_covs/OSM_LU01_LU13_LU15_LU21_VEG_2022_2024-04-19.csv")
+names(veg_2022)
+
+hfi_2021 <- read_csv("data/raw/raw_covs/OSM_LU2_LU3_HFI_2021_04-19-2024.csv")
+names(hfi_2021)
+
+# remove "FEATURE_TY in front of column names
+colnames(hfi_2021) <- gsub("^FEATURE_TY", "", colnames(hfi_2021))
+
+hfi_2021 <- hfi_2021 %>%
+  select(-Gridcll, -Lab)
+
+colnames(hfi_2021) <- gsub("\\.", "-", colnames(hfi_2021))
+
+veg_2021 <- read_csv("data/raw/raw_covs/OSM_LU2_LU3_VEG_2021_04-19-2024.csv")
+names(veg_2021)
+
+# remove prefix
+colnames(veg_2021) <- gsub("^LC_class", "", colnames(veg_2021))
+
+veg_2021 <- veg_2021 %>%
+  select(-Gridcll, -Lab)
+
+hfi_2023 <- read_csv("data/raw/raw_covs/OSM_LU09_LU14_LU16_LU22_HFI_2023_20250209.csv")
+names(hfi_2023)
+
+veg_2023 <- read_csv("data/raw/raw_covs/OSM_LU09_LU16_LU14_LU22_VEG_2023_20250209.csv")
+names(veg_2023)
+
+colnames(veg_2023) <- gsub("^LC_class", "", colnames(veg_2023))
+
+```
+
+```{r combine}
+# list the dataframes
+data <- list(hfi_2021, hfi_2022, hfi_2023, veg_2021, veg_2022, veg_2023)
+
+# get all the possible columns
+cols <- unique(unlist(lapply(data, colnames)))
+cols
+
+# Add missing columns to each dataframe with zero values
+dfs_filled <- lapply(data, function(df) {
+  missing_cols <- setdiff(cols, colnames(df))  # find missing columns
+  df[missing_cols] <- 0  # add missing columns with 0
+  return(df)
+})
+
+all_data <- bind_rows(dfs_filled)
+
+names(all_data)
+
+# WELL-GAS, WELL-ABAND, WELL_CLEARED_NOT_DRILLED, WELL-BITUMEN, WELL-OTHER, WELL-CASED, WELL_CLEARED_NOT_CONFIRMED, WELL-UNKNOWN, WELL-OIL,  
+```
+
+```{r formatting}
+
+# Select columns that contain the word "WELL"
+well_cols <- grep("WELL", colnames(all_data), value = TRUE)
+
+other_cols <- c("Site", "BUFF_DIST")
+
+well_cols <- unique(c(well_cols, other_cols))
+
+# Subset the DataFrame with only the selected columns
+wells <- all_data[, well_cols]
+```
+
+```{r grouping}
+wells$wells_active <- rowSums(wells[, 2:10])
+
+wells <- wells %>%
+  select(Site, BUFF_DIST, wells_active, `WELL-ABAND`)
+
+#write.csv(wells, "data/processed/wells_subgroups.csv")
+
+```
