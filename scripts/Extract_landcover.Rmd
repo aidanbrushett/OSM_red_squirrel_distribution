@@ -1,0 +1,288 @@
+---
+title: "0b. Extract natural composition"
+author: "Aidan Brushett"
+date: "2025-04-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(sf)
+```
+
+# Load, clip the forest inventory data
+
+```{r Loading data, change the names to the current camera array/subsetted or full feature layers}
+# Camera locations (point)
+sites <- st_read("./maps/OSM_mapping.gdb", layer = "all_arrays_locations_covariates") %>%
+  
+  filter(str_detect(array, "LU")) %>%
+  
+  select(array, site)
+
+plot(sites[1])
+
+# buffer sites so that we can filter the landcover data and reduce file size
+sites_buffered <- st_buffer(sites, dist = 10000) %>%
+  
+  st_union()
+
+plot(sites_buffered[1])
+
+# load landcover layer (will be slow)
+landcover_unclipped <- st_read("./maps/SBFI_2020_Boreal_Plains.gdb", layer = "SBFI_2020_polygons")
+
+landcover <- landcover_unclipped %>%
+  
+  st_transform(., crs = 26912) %>%
+  
+  filter(lengths(st_intersects(., sites_buffered)) > 0)
+
+#make sure it's all projected correctly 
+st_crs(landcover, describe = TRUE)
+st_crs(sites, describe = TRUE)
+plot(landcover[1])
+
+# clean up
+rm(landcover_unclipped, sites_buffered)
+gc()
+
+# double check that they are all format "sf" and "dataframe"
+str(sites)
+str(landcover)
+```
+
+# Reshape the data to get some extra columns 
+
+```{r}
+tree_spp <- landcover %>%
+  
+  st_drop_geometry() %>%
+  
+  select(SPECIES_1,
+         SPECIES_2,
+         SPECIES_3,
+         SPECIES_4,
+         SPECIES_5) %>%
+  
+  unlist(.) %>%
+  
+  unique(.) %>%
+
+  .[ . != " "] # Remove empty strings
+
+# Re-pivot the tree data for each polygon. This can take a while and is a bit clunky. 
+tree_percent <- landcover %>%
+  
+  st_drop_geometry() %>%
+  
+  select(ID,
+         contains("SPECIES") & 
+           !contains("_CML"),
+         -SPECIES_NUMBER,
+         -SPECIES_CONIFEROUS_PERC
+         ) %>%
+  
+  mutate(across(everything(), as.character)) %>%  # Convert all columns to character
+  
+  pivot_longer(cols = starts_with("SPECIES_"),
+               names_to = "temp",
+               values_to = "val") %>%
+  
+  # What rank is the species? We don't actually care but this helps keep things tidy/avoids duplicates when we pivot wider later
+  mutate(spp_rank = as.numeric(str_extract(temp, "\\d+"))) %>%
+
+  # Remove the numbers so that all the former rank columns are just called "species"
+  mutate(temp = str_replace_all(temp, "_\\d+", ""),
+         temp = str_replace_all(temp, "SPECIES_PERC", "PERCENTAGE")) %>%
+  
+  # Pivot wider so we now have a species column and a percent column
+  pivot_wider(names_from = temp, values_from = val) %>%
+  
+  # Only want the non-zero percents
+  filter(PERCENTAGE > 0) %>%
+
+  # Pivot wider again
+  pivot_wider(names_from = SPECIES, values_from = PERCENTAGE, values_fill = "") %>%
+  
+  select(-spp_rank) %>%
+  
+  mutate(across(everything(), as.numeric)) %>%
+  
+  mutate(across(everything(), ~ replace(., is.na(.), 0))) %>%
+
+  group_by(ID) %>%
+
+  summarize(across(everything(), sum))
+
+
+harvest_percent <- landcover %>% 
+  
+  st_drop_geometry(.) %>%
+  
+  select(ID,
+         contains("DISTURB_HARVEST")) %>%
+  
+  pivot_wider(names_from = DISTURB_HARVEST_YEAR, 
+              values_from = DISTURB_HARVEST_PERC, 
+              values_fill = 0) %>%
+  
+  select(-`0`) %>%
+  
+  rename_with(., ~paste0("HARVEST_PCT_", .), .cols = !contains("ID")) %>%
+    
+  select(ID, sort(names(.)))
+
+
+fire_percent <- landcover %>% 
+  
+  st_drop_geometry(.) %>%
+  
+  select(ID,
+         DISTURB_FIRE_YEAR,
+         DISTURB_FIRE_PERC) %>%
+  
+  pivot_wider(names_from = DISTURB_FIRE_YEAR, 
+              values_from = DISTURB_FIRE_PERC, 
+              values_fill = 0) %>%
+  
+  select(-`0`) %>%
+  
+  rename_with(., ~paste0("FIRE_PCT_", .), .cols = !contains("ID")) %>%
+    
+  select(ID, sort(names(.)))
+
+
+
+
+fire_intensity <- landcover %>% 
+  
+  st_drop_geometry(.) %>%
+  
+  select(ID,
+         DISTURB_FIRE_MAGNITUDE_AVG,
+         DISTURB_FIRE_YEAR) %>%
+  
+  pivot_wider(names_from = DISTURB_FIRE_YEAR, 
+              values_from = DISTURB_FIRE_MAGNITUDE_AVG, 
+              values_fill = 0) %>%
+  
+  select(-`0`) %>%
+  
+  rename_with(., ~paste0("FIRE_MAG_", .), .cols = !contains("ID")) %>%
+    
+  select(ID, sort(names(.)))
+
+
+landcover_recalculated <- landcover %>%
+  
+  left_join(tree_percent, by = "ID") %>%
+  
+  left_join(fire_percent, by = "ID") %>%
+  
+  left_join(fire_intensity, by = "ID") %>%
+  
+  left_join(harvest_percent, by = "ID") %>%
+  
+  mutate(across(
+        .cols = c(all_of(tree_spp), contains("FIRE_PCT"), contains("HARVEST_PCT")), 
+        ~ replace(., is.na(.), 0))) %>%
+  
+  rename_with(., ~paste0(., "_PCT_OF_TREED"), .cols = all_of(tree_spp))
+
+rm(tree_spp, tree_percent, fire_percent, fire_intensity, harvest_percent)
+```
+
+# Extract the variables
+
+This sums the % cover within each polygon and is weighted by their proportion of area within the buffer.
+
+-   e.g. a polygon takes up 0.50 of the buffer and was 50% conifer = 25% conifer total
+-   an additional polygon takes up 0.25 of the buffer and was 80% conifer = 20% conifer total
+-   the proportion cover for the total buffer around the site is 45% conifer. 
+-   *within a polygon the vegetation attributes are assumed to be constant*
+
+```{r Extract covariates for forest age, message=FALSE, warning=FALSE}
+landcover_metrics <- landcover_recalculated %>% 
+  
+  # Select the metrics that you want to calculate
+  select(., 
+         
+         # Forest age
+         contains("AGE_"),
+         -AGE_AVG,
+         -AGE_MIN,
+         -AGE_MAX,
+         -AGE_MEDIAN,
+         -AGE_SD,
+         
+         # Landcover
+         contains("LC_"),
+         -LC_FAO_FOREST, 
+         -LC_TREED, 
+         -LC_WETLAND_VEGETATION,
+         
+         # Tree composition
+         contains("_PCT_OF_TREED"),
+         
+         # Fire and harvest percent
+         contains("FIRE_PCT"),
+         contains("HARVEST_PCT")
+         )
+
+sites_landcover_metrics <- list()
+
+start_time <- Sys.time()
+
+for(i in 1:nrow(sites)) {
+  
+  progress <- (i - 1) / nrow(sites)
+    
+  site <- sites[i,]
+
+  cat("\r Extracting site ", i, " of ", nrow(sites), " (", site$site, "): ", 
+      round(as.numeric(difftime(Sys.time(), start_time, units = "hours")) * (1 - progress) / progress, 2), 
+      " hours remaining        ", sep = "")
+
+  sites_landcover_metrics[[i]] <- 
+
+    purrr::map_dfr(seq(250, 5000, by = 250), ~
+                     
+      st_intersection(landcover_metrics,
+                      st_buffer(site, .x)) %>%
+      
+      mutate(feature_area = st_area(.) %>% 
+               as.numeric(.),
+             total_area = sum(feature_area, na.rm = TRUE) %>% 
+               as.numeric(.),
+             percent_area = feature_area / total_area,
+             across(where(is.numeric) & !contains("_area"), ~ . / 100 * percent_area)) %>%
+  
+      st_drop_geometry(.) %>%
+    
+      summarise(across(where(is.numeric) & !contains("_area"), sum, na.rm = TRUE)) %>%
+    
+      mutate(buffer_dist = .x,
+             array = site$array,
+             site = site$site)
+      
+    )
+  
+  rm(site)
+  gc()
+
+}
+
+save(sites_landcover_metrics, file = "./data/raw/all_sites_landcover_metrics.RData")
+
+sites_landcover_metrics_df <- bind_rows(sites_landcover_metrics) %>%
+
+  relocate(array, site, buffer_dist)
+
+write_csv(sites_landcover_metrics_df, "./data/raw/all_sites_landcover_metrics.csv")
+```
