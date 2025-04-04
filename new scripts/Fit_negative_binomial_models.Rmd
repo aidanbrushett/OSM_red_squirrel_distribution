@@ -102,7 +102,7 @@ core_models <- purrr::map(unique(data$buffer_dist), ~{
   
   cat("\r\r Fitting models at scale:", .x, "meters      ")
 
-  data_subset <- data %>%
+  data_subset <- data_scaled %>%
     
     filter(buffer_dist == .x)
   
@@ -225,6 +225,134 @@ core_models <- purrr::map(unique(data$buffer_dist), ~{
   arrange(delta)
 ```
 
+We could also re-produce this process using tree species instead of landcover
+
+```{r}
+core_models_spp <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data_scaled %>%
+    
+    filter(buffer_dist == .x)
+  
+  m_null <- glmmTMB(squirrel ~ 
+                        
+                        #pct_pinu_ban +
+                        #pct_pice_mar +
+                        #pct_pice_gla +
+                        #pct_popu_tre +
+                        #pct_lari_lar +
+                        #fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_fire <- glmmTMB(squirrel ~ 
+                        
+                        #pct_pinu_ban +
+                        #pct_pice_mar +
+                        #pct_pice_gla +
+                        #pct_popu_tre +
+                        #pct_lari_lar +
+                        fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_conifspp <- glmmTMB(squirrel ~ 
+                        
+                        pct_pinu_ban +
+                        pct_pice_mar +
+                        pct_pice_gla +
+                        #pct_popu_tre +
+                        #pct_lari_lar +
+                        #fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_conifspp_fire <- glmmTMB(squirrel ~ 
+                        
+                        pct_pinu_ban +
+                        pct_pice_mar +
+                        pct_pice_gla +
+                        #pct_popu_tre +
+                        #pct_lari_lar +
+                        fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_allspp <- glmmTMB(squirrel ~ 
+                        
+                        pct_pinu_ban +
+                        pct_pice_mar +
+                        pct_pice_gla +
+                        pct_popu_tre +
+                        pct_lari_lar +
+                        #fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_allspp_fire <- glmmTMB(squirrel ~ 
+                        
+                        pct_pinu_ban +
+                        pct_pice_mar +
+                        pct_pice_gla +
+                        pct_popu_tre +
+                        pct_lari_lar +
+                        fire_0_15 +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  MuMIn::model.sel(m_null, m_fire, m_conifspp, m_conifspp_fire, m_allspp, m_allspp_fire) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+```
+
 What are the top predictors and top spatial scale for our natural covariates?
 
 ```{r}
@@ -238,9 +366,649 @@ core_predictors <- core_models %>%
 
   colnames(.)
   
-core_buffer <- core_results$buffer_dist[1]
+core_buffer <- core_models$buffer_dist[1]
 
 core_predictors
 core_buffer
 ```
+# 2. Composition models
+
+```{r}
+comp_models <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data_scaled %>%
+    
+    filter(buffer_dist == .x)
+  
+  m_null <- glmmTMB(squirrel ~ 
+                        #lc_coniferous + 
+                        #lc_mixedwood + 
+                        #lc_broadleaf + 
+                        #fire_0_15 + 
+
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15
+                        #roads +
+                        
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_core <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15
+                        #roads +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_seis_wells <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                          
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_harvest <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                         
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        harvest_0_15 +
+                        #roads + + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_harvest_seis <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                              
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_active <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                        
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        #harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_active_harvest <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                          
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_active_seis <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                        
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        #harvest_0_15 +
+                        #roads + 
+                          
+                      (1|array/site),
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+
+  m_global <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                        
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  MuMIn::model.sel(m_null, m_core, m_seis_wells, m_harvest, m_harvest_seis, m_active_seis, m_active, m_active_harvest, m_global) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+```
+
+What are the top predictors and top spatial scale for our natural covariates?
+
+```{r}
+comp_predictors <- comp_models %>%
+  
+  select(1:which(names(.) == "df") - 1, -intercept) %>% 
+  
+  filter(row_number()==1) %>%
+  
+  select(where(~ !is.na(.))) %>%  # Remove columns with NA values
+
+  colnames(.)
+  
+comp_buffer <- comp_models$buffer_dist[1]
+
+comp_predictors
+comp_buffer
+```
+
+
+# 3. Configuration models
+
+Let's fit the configuration models
+
+```{r}
+config_models <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data_scaled %>%
+    
+    filter(buffer_dist == .x)
+  
+  m_null <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        #fire_0_15 +
+                        #lc_broadleaf +
+                        #lc_coniferous +
+                        #lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        #nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_core <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        #nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_het <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        landscape_shei +
+                        #nonanthro_ed + 
+                        #landscape_mesh +
+                         
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_edge <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+                    
+  m_conn <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        #nonanthro_ed + 
+                        landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_edge_conn <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood +
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+
+  m_het_conn <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        landscape_shei +
+                        #nonanthro_ed + 
+                        landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+    
+  m_het_edge <- glmmTMB(squirrel ~
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood +
+                      
+                        # configuration variables
+                        landscape_shei +
+                        nonanthro_ed +
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_config <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood +
+                      
+                        # configuration variables
+                        landscape_shei +
+                        nonanthro_ed +
+                        landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+
+  
+  MuMIn::model.sel(m_null, m_core, m_edge, m_het, m_conn, m_het_edge, m_edge_conn, m_het_conn, m_config) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+```
+
+What are the top predictors and top spatial scale for our configuration covariates?
+
+```{r}
+config_predictors <- config_models %>%
+  
+  select(1:which(names(.) == "df") - 1, -intercept) %>% 
+  
+  filter(row_number()==1) %>%
+  
+  select(where(~ !is.na(.))) %>%  # Remove columns with NA values
+
+  colnames(.)
+  
+config_buffer <- config_models$buffer_dist[1]
+
+config_predictors
+config_buffer
+```
+
+# 3B. Configuration interaction models
+
+```{r}
+config_int_models <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data_scaled %>%
+    
+    filter(buffer_dist == .x)
+  
+  m_null <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        #fire_0_15 +
+                        #lc_broadleaf +
+                        #lc_coniferous +
+                        #lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        #nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_core <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        #nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_edge <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        #landscape_mesh +
+
+                        (1|array/site),
+
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_edge_cfi <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site_with_vegedges +
+                        #landscape_mesh +
+
+                        (1|array/site),
+
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_edgeXcfi <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site_with_vegedges +
+                        nonanthro_ed*cfi_site_with_vegedges +
+                        #landscape_mesh +
+
+                        (1|array/site),
+
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+
+  MuMIn::model.sel(m_null, m_core, m_edge, m_edge_cfi, m_edgeXcfi) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+```
+
+# 4. Combine all models into a bigass table
+
+```{r}
+all_models <- bind_rows(
+  core_models,
+  comp_models,
+  config_models,
+  config_int_models
+  ) %>%
+  
+  mutate(model_name = paste0(model_name, "_", buffer_dist)) %>%
+  
+  distinct(model_name, .keep_all = TRUE) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+
+  relocate(model_name, 'scale' = 'buffer_dist', 
+           df, logLik, AICc, delta,
+           'delta_subsetted' = 'delta_subset', 
+           'weight_subsetted' = 'weight')
+  
+  
+  
+
+write_csv(all_models, file = "./data/processed/all_models_scales_aic_with_coefficients.csv")
+```
+
+
+
+
+
 
