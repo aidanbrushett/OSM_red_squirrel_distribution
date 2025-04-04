@@ -92,10 +92,9 @@ cor_data <- purrr::map(seq(250, 5000, by = 250),
   
 ```
  pice mar (black spruce) and popu tre (trembling) are highly correlated at 250 m 
- mixed wood and popu tre
+ removed popu tre 
  broadleaf and pice mar
- broadleaf and popu tre
- 
+
 # 3. SUB MODELS 
 
 ## 3.1. 'NATURAL' sub-model 1: tree percentages
@@ -131,6 +130,7 @@ natural_tree_model <- natural_tree_model %>%
 
 'NATURAL' sub-model 2: cover types
 
+add all landcover types to this model
 ```{r natural, message=FALSE, warning=FALSE, paged.print=TRUE}
 natural_cover <- purrr::map(seq(250, 5000, by = 250), ~{
   
@@ -192,7 +192,10 @@ natural_harvest15 <- purrr::map(seq(250, 5000, by = 250), ~{
          submodel = "NATURAL_harvest15")
 ```
 
+
 'NATURAL' sub-model 4: trees and cover
+
+remove broadleaf because it is correlated with a tree type
 
 ```{r natural, message=FALSE, warning=FALSE, paged.print=TRUE}
 natural_trees_cover <- purrr::map(seq(250, 5000, by = 250), ~{
@@ -205,7 +208,7 @@ natural_trees_cover <- purrr::map(seq(250, 5000, by = 250), ~{
   # Fit the initial model for the current buffer distance
   model_trees_cover <- glmmTMB(squirrel ~
                            PINU.BAN_PCT_OF_TREED +
-                           POPU.TRE_PCT_OF_TREED + 
+                           #POPU.TRE_PCT_OF_TREED + 
                            PICE.MAR_PCT_OF_TREED +
                            PICE.GLA_PCT_OF_TREED +
                            LARI.LAR_PCT_OF_TREED +     
@@ -242,7 +245,7 @@ natural_trees_harvest <- purrr::map(seq(250, 5000, by = 250), ~{
   # Fit the initial model for the current buffer distance
   model_trees_harvest <- glmmTMB(squirrel ~
                            PINU.BAN_PCT_OF_TREED +
-                           POPU.TRE_PCT_OF_TREED + 
+                           #POPU.TRE_PCT_OF_TREED + 
                            PICE.MAR_PCT_OF_TREED +
                            PICE.GLA_PCT_OF_TREED +
                            LARI.LAR_PCT_OF_TREED +     
@@ -316,6 +319,11 @@ natural_cover_harvest_trees <- purrr::map(seq(250, 5000, by = 250), ~{
                            LC_CONIFEROUS +
                            LC_BROADLEAF + 
                            LC_MIXEDWOOD +
+                           PINU.BAN_PCT_OF_TREED +
+                           #POPU.TRE_PCT_OF_TREED + 
+                           PICE.MAR_PCT_OF_TREED +
+                           PICE.GLA_PCT_OF_TREED +
+                           LARI.LAR_PCT_OF_TREED + 
                            (1|array/site), 
                          data = data_subset, 
                          family = nbinom2, 
@@ -332,6 +340,7 @@ natural_cover_harvest_trees <- purrr::map(seq(250, 5000, by = 250), ~{
   mutate(buffer = as.numeric(rownames(.)),
          submodel = "NATURAL_cover_harvest_trees")
 ```
+
 
 ## 3.2. 'COMP' sub-models
 
@@ -569,7 +578,7 @@ comp_global <- purrr::map(seq(250, 5000, by = 250), ~{
 
 ## 3.4. Save results
 
-We will save the top predictors and the top spatial scale so that we don't need to re-run the dredge every time. 
+We will save the top predictors and the top spatial scale so that we don't need to re-run the submodels every time. 
 
 ```{r}
 save(config_results, comp_results, natural_results, 
