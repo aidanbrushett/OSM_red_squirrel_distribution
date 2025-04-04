@@ -1,0 +1,167 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-04"
+---
+
+names(data)
+
+```{r}
+comp_models <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data %>%
+    
+    filter(buffer_dist == .x)
+  
+  c_null <- glmmTMB(squirrel ~ 
+                        
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15
+                        #roads +
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_seis_wells <- glmmTMB(squirrel ~ 
+                        
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_harvest <- glmmTMB(squirrel ~ 
+                        
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        harvest_0_15 +
+                        #roads + + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_harvest_seis <- glmmTMB(squirrel ~ 
+                        
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_active <- glmmTMB(squirrel ~ 
+                        
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        #harvest_0_15 +
+                        roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_active_harvest <- glmmTMB(squirrel ~ 
+                        
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        harvest_0_15 +
+                        roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_global <- glmmTMB(squirrel ~ 
+                        
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        harvest_0_15 +
+                        roads + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  MuMIn::model.sel(c_null, m_seis_wells, m_harvest, m_harvest_seis, m_active, m_active_harvest, 
+                   m_global) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+
+```
+
+
