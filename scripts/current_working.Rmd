@@ -15,8 +15,35 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
     
     filter(buffer_dist == .x)
   
-  c_null <- glmmTMB(squirrel ~ 
+  
+    c_null <- glmmTMB(squirrel ~ 
+                        #lc_coniferous + 
+                        #lc_mixedwood + 
+                        #lc_broadleaf + 
+                        #fire_0_15 + 
+
+                        #pipe_trans + 
+                        #seismic + 
+                        #wells_inactive + 
+                        #harvest_total +
+                        #wells_active +
+                        #osm_industrial +
+                        #harvest_0_15
+                        #roads +
                         
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  c_null_core <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+
                         #pipe_trans + 
                         #seismic + 
                         #wells_inactive + 
@@ -32,8 +59,13 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
                       family = nbinom2, 
                       na.action = na.fail)
   
+  
   m_seis_wells <- glmmTMB(squirrel ~ 
-                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                          
                         pipe_trans + 
                         seismic + 
                         wells_inactive + 
@@ -51,11 +83,15 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
   
   
   m_harvest <- glmmTMB(squirrel ~ 
-                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                         
                         #pipe_trans + 
                         #seismic + 
                         #wells_inactive + 
-                        harvest_total +
+                        #harvest_total +
                         #wells_active +
                         #osm_industrial +
                         harvest_0_15 +
@@ -68,11 +104,15 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
                       na.action = na.fail)
   
   m_harvest_seis <- glmmTMB(squirrel ~ 
-                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                              
                         pipe_trans + 
                         seismic + 
                         wells_inactive + 
-                        harvest_total +
+                        #harvest_total +
                         #wells_active +
                         #osm_industrial +
                         harvest_0_15 +
@@ -86,6 +126,10 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
   
   
   m_active <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
                         
                         #pipe_trans + 
                         #seismic + 
@@ -103,11 +147,15 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
                       na.action = na.fail)
   
   m_active_harvest <- glmmTMB(squirrel ~ 
-                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
+                          
                         #pipe_trans + 
                         #seismic + 
                         #wells_inactive + 
-                        harvest_total +
+                        #harvest_total +
                         wells_active +
                         osm_industrial +
                         harvest_0_15 +
@@ -121,11 +169,15 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
   
   
   m_global <- glmmTMB(squirrel ~ 
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        fire_0_15 + 
                         
                         pipe_trans + 
                         seismic + 
                         wells_inactive + 
-                        harvest_total +
+                        #harvest_total +
                         wells_active +
                         osm_industrial +
                         harvest_0_15 +
@@ -164,4 +216,22 @@ comp_models <- purrr::map(unique(data$buffer_dist), ~{
 
 ```
 
+What are the top predictors and top spatial scale for our natural covariates?
+
+```{r}
+comp_predictors <- comp_models %>%
+  
+  select(1:which(names(.) == "df") - 1, -intercept) %>% 
+  
+  filter(row_number()==1) %>%
+  
+  select(where(~ !is.na(.))) %>%  # Remove columns with NA values
+
+  colnames(.)
+  
+comp_buffer <- comp_predictors$buffer_dist[1]
+
+comp_predictors
+comp_buffer
+```
 
