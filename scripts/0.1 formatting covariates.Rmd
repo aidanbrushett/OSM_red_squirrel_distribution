@@ -23,11 +23,32 @@ We want to separate active and abandoned well, as well as format some of the non
 hfi_2022 <- read_csv("data/raw/raw_covs/OSM_LU01_LU13_LU15_LU21_HFI_2022_2024-04-19.csv")
 names(hfi_2022)
 
+hfi_2022 <- hfi_2022 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
+
 veg_2022 <- read_csv("data/raw/raw_covs/OSM_LU01_LU13_LU15_LU21_VEG_2022_2024-04-19.csv")
 names(veg_2022)
 
+veg_2022 <- veg_2022 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
+
 hfi_2021 <- read_csv("data/raw/raw_covs/OSM_LU2_LU3_HFI_2021_04-19-2024.csv")
 names(hfi_2021)
+
+hfi_2021 <- hfi_2021 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
 
 # remove "FEATURE_TY in front of column names
 colnames(hfi_2021) <- gsub("^FEATURE_TY", "", colnames(hfi_2021))
@@ -46,36 +67,61 @@ colnames(veg_2021) <- gsub("^LC_class", "", colnames(veg_2021))
 veg_2021 <- veg_2021 %>%
   select(-Gridcll, -Lab)
 
+veg_2021 <- veg_2021 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
+
 hfi_2023 <- read_csv("data/raw/raw_covs/OSM_LU09_LU14_LU16_LU22_HFI_2023_20250209.csv")
 names(hfi_2023)
+
+hfi_2023 <- hfi_2023 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
 
 veg_2023 <- read_csv("data/raw/raw_covs/OSM_LU09_LU16_LU14_LU22_VEG_2023_20250209.csv")
 names(veg_2023)
 
 colnames(veg_2023) <- gsub("^LC_class", "", colnames(veg_2023))
 
+veg_2023 <- veg_2023 %>%
+    mutate(
+              Site = gsub("-", "_", Site) %>% # First, replace the hyphen with underscore
+                gsub("_0+", "_", .) %>% # Then, remove leading zeros after the underscore
+                gsub(" ", "", .) %>% # Then, remove any spaces
+                gsub("LU0", "LU", .)) # Remove leading zeros from LU names for consistency
+
+names(veg_2023)
 ```
+
+```{r combine years}
+data_2021 <- hfi_2021 %>%
+  left_join(veg_2021, by = c("Site", "BUFF_DIST"))
+
+data_2022 <- hfi_2022 %>%
+  left_join(veg_2022, by = c("Site", "BUFF_DIST"))
+
+data_2023 <- hfi_2023 %>%
+  left_join(veg_2023, by = c("Site", "BUFF_DIST"))
+
+
+```
+
 
 ```{r combine}
 # list the dataframes
-data <- list(hfi_2021, hfi_2022, hfi_2023, veg_2021, veg_2022, veg_2023)
-
-# get all the possible columns
-cols <- unique(unlist(lapply(data, colnames)))
-cols
-
-# Add missing columns to each dataframe with zero values
-dfs_filled <- lapply(data, function(df) {
-  missing_cols <- setdiff(cols, colnames(df))  # find missing columns
-  df[missing_cols] <- 0  # add missing columns with 0
-  return(df)
-})
-
-all_data <- bind_rows(dfs_filled)
+all_data <- bind_rows(data_2021, data_2022, data_2023)
 
 names(all_data)
 
-# WELL-GAS, WELL-ABAND, WELL_CLEARED_NOT_DRILLED, WELL-BITUMEN, WELL-OTHER, WELL-CASED, WELL_CLEARED_NOT_CONFIRMED, WELL-UNKNOWN, WELL-OIL,  
+# Remove rows where 'site' does not start with 'LU'
+all_data <- all_data %>%
+  filter(grepl("^LU", Site))
 ```
 
 ```{r formatting}
@@ -97,6 +143,69 @@ wells$wells_active <- rowSums(wells[, 2:10])
 wells <- wells %>%
   select(Site, BUFF_DIST, wells_active, `WELL-ABAND`)
 
+#rename columns for easier combining
+wells <- wells %>%
+  rename(buffer_dist = BUFF_DIST, site = Site, wells_aband = `WELL-ABAND`)
+
 #write.csv(wells, "data/processed/wells_subgroups.csv")
+```
+
+```{r add this to the main dataframe}
+df <- read_csv("data/processed/OSM_monthly_detections_with_covariates_2021_2022_2023.csv")
+
+all_covs <- df %>%
+  left_join(wells, by = c("site", "buffer_dist"))
+
+
+#write.csv(all_covs, "data/processed/OSM_monthly_detections_with_covariates_2021_2022_2023.csv)
 
 ```
+
+
+Now lets deal with the landcover data 
+
+```{r load data}
+landcover <- read_csv("data/raw/all_sites_landcover_metrics.csv")
+```
+
+```{r group harvest}
+# we want to create four new columns for harvest, < 10 yrs old, > 10 yrs old, < 15 years old, > 15 yrs old
+
+years_10 <- paste0("HARVEST_PCT_", 2010:2020)
+years_more_10 <- paste0("HARVEST_PCT_", 1987:2009)
+
+
+landcover <- landcover %>%
+  mutate(
+    harvest_10_orunder = rowSums(landcover[, years_10], na.rm = TRUE),
+    harvest_10_above = rowSums(landcover[, years_more_10], na.rm = TRUE)
+  )
+
+years_15 <- paste0("HARVEST_PCT_", 2005:2020)
+years_more_15 <- paste0("HARVEST_PCT_", 1987:2004)
+
+
+landcover <- landcover %>%
+  mutate(
+    harvest_15_orunder = rowSums(landcover[, years_15], na.rm = TRUE),
+    harvest_15_above = rowSums(landcover[, years_more_15], na.rm = TRUE)
+  )
+
+```
+
+
+```{r selecting columns}
+landcover <- landcover %>%
+  select(site, buffer_dist, harvest_10_orunder, harvest_10_above, harvest_15_orunder, harvest_15_above,
+         PINU.BAN_PCT_OF_TREED, POPU.TRE_PCT_OF_TREED, PICE.MAR_PCT_OF_TREED, PICE.GLA_PCT_OF_TREED, 
+         LARI.LAR_PCT_OF_TREED, LC_CONIFEROUS, LC_BROADLEAF, LC_MIXEDWOOD)
+
+
+data <- all_covs %>%
+  left_join(landcover, by = c("site", "buffer_dist"))
+
+write.csv(data, "data/processed/monthly_all_covs.csv")
+
+```
+
+

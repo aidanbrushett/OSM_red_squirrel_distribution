@@ -178,7 +178,7 @@ Let's look at how much variation we have in our metrics from histograms. For now
 ```{r}
 data %>% 
   
-  select(6:ncol(.)) %>%
+  select(7:ncol(.)) %>%
   
   # use imap which will retain both the data (x) and the variable names (y)
   imap(~ ggplot(mapping = aes(x = .x)) +
