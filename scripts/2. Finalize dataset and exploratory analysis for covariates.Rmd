@@ -23,7 +23,7 @@ Email: [aidanbrushett\@uvic.ca](aidanbrushett@uvic.ca)
 
 # 1. Setup
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 rm(list=ls()) # start fresh :)
 
 library(tidyverse)
