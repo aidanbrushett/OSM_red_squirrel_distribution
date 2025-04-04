@@ -1,0 +1,250 @@
+---
+title: "Submodels and final models"
+author: "Emerald Arthurs and Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      paged.print=TRUE)
+```
+
+# 0. Before you begin
+
+Emerald Arthurs
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [emeraldarthurs@uvic.ca](emeraldarthurs@uvic.ca)
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+***
+
+# 0. Setup
+
+```{r libraries, message=FALSE, warning=FALSE}
+rm(list = ls())
+#library(MASS)
+library(glmmTMB)
+#library(lme4)
+library(tidyverse)
+library(MuMIn)
+library(rphylopic)
+library(corrr)
+library(performance)
+library(PerformanceAnalytics)
+
+#`%nin%` <- Negate(`%in%`)
+```
+
+# 1. Import data
+
+We will also apply standardized z-scaling to the data. This is done *per buffer* since technically they are different datasets. 
+
+```{r data for modelling}
+covs <- read_csv("./data/processed/OSM_all_covariates_HFI_SBFI_final.csv")
+
+response <- read_csv("./data/processed/OSM_monthly_detections_2021_2022_2023.csv") %>%
+  
+  filter(species == "red squirrel") %>%
+  
+  select(-species, -presence) %>%
+  
+  rename(squirrel = detections)
+
+
+data <- response %>%
+  
+  left_join(covs, by = c("array", "site"))
+
+# Make sure there are 20 rows per site/month/year 
+data %>% 
+  
+  group_by(site, month, year) %>%
+  
+  summarize(n_obs = n()) %>%
+  
+  arrange(n_obs)
+# 20 for everything. Looks good!!
+
+data_scaled <- data %>%
+  
+  group_by(buffer_dist) %>%
+  
+  mutate(across(cfi_site:last_col(), ~ as.numeric(scale(.)))) %>%
+  
+  ungroup(.)
+
+# The mean will be 0 even though we grouped first, since the mean for each buffer is still 0. 
+summary(data_scaled)
+```
+
+# 2. Determine core model
+
+```{r}
+names(data)
+```
+
+First, let's try using landcover instead of tree composition first. 
+
+```{r}
+core_models <- purrr::map(unique(data$buffer_dist), ~{
+  
+  cat("\r\r Fitting models at scale:", .x, "meters      ")
+
+  data_subset <- data %>%
+    
+    filter(buffer_dist == .x)
+  
+  m_null <- glmmTMB(squirrel ~ 
+                        
+                        #lc_coniferous + 
+                        #lc_mixedwood + 
+                        #lc_broadleaf + 
+                        #lc_shrubs +
+                        #lc_herbs +
+                        #fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_fire <- glmmTMB(squirrel ~ 
+                        
+                        #lc_coniferous + 
+                        #lc_mixedwood + 
+                        #lc_broadleaf + 
+                        #lc_shrubs +
+                        #lc_herbs +
+                        fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_forest <- glmmTMB(squirrel ~ 
+                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        #lc_shrubs +
+                        #lc_herbs +
+                        #fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_forest_fire <- glmmTMB(squirrel ~ 
+                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf +
+                        #lc_shrubs +
+                        #lc_herbs +
+                        fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  
+  m_landcover <- glmmTMB(squirrel ~ 
+                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        lc_shrubs +
+                        lc_wetland +
+                        lc_wetland_treed + 
+                        #fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  m_landcover_fire <- glmmTMB(squirrel ~ 
+                        
+                        lc_coniferous + 
+                        lc_mixedwood + 
+                        lc_broadleaf + 
+                        lc_shrubs +
+                        lc_wetland +
+                        lc_wetland_treed + 
+                        fire_0_15 + 
+
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
+  MuMIn::model.sel(m_null, m_fire, m_forest, m_forest_fire, m_landcover, m_landcover_fire) %>%
+  
+    as.data.frame(.) %>%
+    
+    select(-`disp((Int))`) %>%
+  
+    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+    
+    rename(intercept = `Int`) %>%
+    
+    mutate(model_name = rownames(.),
+           buffer_dist = .x) %>%
+    
+    rename(delta_subset = delta)
+
+  }
+  ) %>%
+  
+  bind_rows(.) %>%
+  
+  mutate(delta = AICc - min(AICc)) %>%
+  
+  arrange(delta)
+```
+```{r}
+
+```
+
+
+What are the top predictors and top spatial scale for our natural covariates?
+
+```{r}
+core_predictors <- core_models %>%
+  
+  select(1:which(names(.) == "df") - 1, -intercept) %>% 
+  
+  filter(row_number()==1) %>%
+  
+  select(where(~ !is.na(.))) %>%  # Remove columns with NA values
+
+  colnames(.)
+  
+core_buffer <- core_results$buffer_dist[1]
+
+core_predictors
+core_buffer
+```
+

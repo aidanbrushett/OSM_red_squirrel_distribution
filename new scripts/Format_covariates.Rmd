@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(sf)
 library(tidyverse)
+rm(list=ls())
 ```
 
 
@@ -181,15 +182,21 @@ hfi_grouped <- hfi %>%
     
     # inactive well sites
     wells_inactive = rowSums(across(any_of(c(
-      "well_aband",
-      "well_other", 
-      "well_unknown",
-      "well_cleared_not_confirmed", 
-      "well_cleared_not_drilled"
+      "well_aband"
     )))),
     
     wells_active = rowSums(across(any_of(c(
-      'well_bitumen', 'well_gas', 'well_oil', 'well_cased'
+      'well_bitumen', 
+      'well_gas', 
+      'well_oil', 
+      'well_cased',
+      "well_cleared_not_confirmed", 
+      "well_cleared_not_drilled",
+      "well_cleared_drilled",
+      "well_drilled_other",
+      "ris_well",
+      "well_other", 
+      "well_unknown"
     )))),
     
     # remove columns that were used to create new columns to tidy the data frame
@@ -324,8 +331,8 @@ names(sbfi)
 # Now compute row-wise harvest_0_15 and harvest_gt_15
 sbfi_fire <- purrr::map_dfr(unique(sbfi$array_year), ~{
 
-  cols_0_15 <- paste0("harvest_area_", seq(.x - 14, .x))
-  cols_gt_15 <- paste0("harvest_area_", seq(1900, .x - 15))
+  cols_0_15 <- paste0("fire_pct_", seq(.x - 14, .x))
+  cols_gt_15 <- paste0("fire_pct_", seq(1900, .x - 15))
 
   sbfi %>%
     filter(array_year == .x) %>%

@@ -1,0 +1,243 @@
+---
+title: "Explore covariates"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: default
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 0. Before you begin
+
+Aidan Brushett M.Sc. Student University of Victoria\
+School of Environmental Studies\
+Email: [aidanbrushett\@uvic.ca](aidanbrushett@uvic.ca)
+
+------------------------------------------------------------------------
+
+# 1. Setup
+
+```{r}
+rm(list=ls()) # start fresh :)
+
+library(tidyverse)
+library(ggplot2)
+library(writexl)
+
+# These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+summarize <- dplyr::summarize
+# Cheeky function that means "not in"
+`%nin%` = Negate(`%in%`)
+```
+
+
+# 1. Import data
+
+```{r}
+covs <- read_csv("./data/processed/OSM_all_covariates_HFI_SBFI_final.csv")
+
+names(covs)
+```
+
+Explore covariates of interest.
+
+```{r}
+covs_to_explore <- covs %>%
+  
+  select(
+    -contains("gt"),
+    -railways,
+    -seismic_lines,
+    -seismic_lines_3D,
+    -trails,
+    -veg_edges,
+    -lc_water,
+    -pct_betu_pap
+         ) %>%
+  
+  relocate((1:8), sort(names(.)))
+```
+
+Histograms at 500 meters:
+
+```{r}
+covs_to_explore %>%
+  
+  filter(buffer_dist == 500) %>%
+  
+  select(-(1:8)) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~ ggplot(mapping = aes(x = .x)) +
+         geom_histogram(bins = 120, fill = "black", color = "black") +
+         labs(title = paste0(.y, ": 500m buffer"), x = .y, y = "Count") +
+         theme_classic())
+```
+
+Box and whiskers at 500 meters:
+
+```{r}
+covs_to_explore %>%
+  
+  filter(buffer_dist == 500) %>%
+  
+  select(-(1:8)) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~ ggplot(mapping = aes(x = .x)) +
+         geom_boxplot(fill = "grey80", color = "grey20") +
+         labs(title = paste0(.y, ": 500m buffer"), x = .y, y = "Count") +
+         theme_classic())
+```
+
+Histograms at 3500 meters:
+
+```{r}
+covs_to_explore %>%
+  
+  filter(buffer_dist == 3500) %>%
+  
+  select(-(1:8)) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~ ggplot(mapping = aes(x = .x)) +
+         geom_histogram(bins = 120, fill = "black", color = "black") +
+         labs(title = paste0(.y, ": 3500m buffer"), x = .y, y = "Count") +
+         theme_classic())
+```
+
+Box and whiskers at 3500 meters:
+
+```{r}
+covs_to_explore %>%
+  
+  filter(buffer_dist == 3500) %>%
+  
+  select(-(1:8)) %>%
+  
+  # use imap which will retain both the data (x) and the variable names (y)
+  imap(~ ggplot(mapping = aes(x = .x)) +
+         geom_boxplot(fill = "grey80", color = "grey20") +
+         labs(title = paste0(.y, ": 3500m buffer"), x = .y, y = "Count") +
+         theme_classic())
+```
+
+
+Now let's look at correlation among variables. We have a ton of variables to look at so for now we'll export to excel.
+
+```{r message=FALSE, warning=FALSE}
+# Histograms for each buffer size
+corr_data <- purrr::map(seq(250, 5000, by = 250), 
+                        ~ covs_to_explore %>% 
+                          
+                          filter(buffer_dist == .x) %>%
+                          
+                          select(9:ncol(.)) %>%
+                          
+                          # pairwise complete observations right now since I'm not sure how to manage all the NAs in the configuration metrics yet
+                          corrr::correlate(., use = "pairwise.complete.obs", 
+                                           method = "spearman", 
+                                           diagonal = NA, 
+                                           quiet = TRUE) %>%
+                          
+                          as_tibble() %>%
+                          
+                          mutate(across(everything(), ~ if_else(row_number() >= min(which(is.na(.))), NA, .))) %>%
+                          
+                          select(rev(names(.))) %>% 
+                          
+                          relocate(term)
+                        
+                        ) %>% 
+  
+  set_names(paste0(seq(250, 5000, by = 250), "m"))
+
+writexl::write_xlsx(corr_data, "./data/processed/OSM_all_covariates_correlation.xlsx")
+```
+
+Let's also just look at the configuration metrics in a more compact format
+
+```{r message=FALSE, warning=FALSE}
+# Histograms for each buffer size
+corr_data_config <- purrr::map(seq(250, 5000, by = 250), 
+                        ~ covs_to_explore %>% 
+                          
+                          filter(buffer_dist == .x) %>%
+
+                          select(contains("landscape") | contains("nonanthro")) %>%
+                          
+                          # pairwise complete observations right now since I'm not sure how to manage all the NAs in the configuration metrics yet
+                          corrr::correlate(., use = "pairwise.complete.obs", 
+                                           method = "spearman", 
+                                           diagonal = NA, 
+                                           quiet = TRUE) %>%
+                          
+                          as_tibble() %>%
+                          
+                          mutate(across(everything(), ~ if_else(row_number() >= min(which(is.na(.))), NA, .))) %>%
+                          
+                          select(rev(names(.))) %>% 
+                          
+                          relocate(term)
+                        
+                        ) %>% 
+  
+  set_names(paste0(seq(250, 5000, by = 250), "m"))
+
+writexl::write_xlsx(corr_data_config, "./data/processed/OSM_all_config_covariates_correlation.xlsx")
+```
+
+
+# 4. Summary table of covariates
+
+This will need to be tweaked at the end of the process to include all variables **at the appropriate spatial scales corresponding to the top results from the dredge**. 
+
+```{r message=FALSE, warning=FALSE}
+covariate_table <- covs_to_explore %>%
+  
+  select(9:ncol(.)) %>%
+  
+  mutate(across(everything(), ~ replace_na(.x, 0))) %>%
+  
+  # z used as a unique delimiter to separate during pivot wider.... hacky but it works
+  summarise(
+    across(everything(), list(
+      zmean = ~mean(.),
+      zmin = ~min(.),
+      zmax = ~max(.),
+      zmedian = ~median(.),
+      zq20 = ~quantile(., probs = 0.20),
+      zq80 = ~quantile(., probs = 0.80)
+    ))
+  ) %>%
+        
+  pivot_longer(cols = everything(), names_to = c("Covariate", ".value"), names_sep = "_z") %>%
+  
+  mutate(`Median (20%, 80%)` = paste0(round(median, 2), 
+                                      " (", round(q20, 2), 
+                                      "–", 
+                                      round(q80, 2), ")"),
+         
+         `Mean (min, max)` = paste0(round(mean, 2), 
+                                    " (", round(min, 2), 
+                                    "–", 
+                                    round(max, 2), ")"),
+         ) %>%
+  
+  filter(Covariate != 'trails') %>%
+  
+  select(-mean, -min, -max, -median, -q20, -q80) %>%
+  
+  mutate(Description = "")
+
+writexl::write_xlsx(covariate_table, "./tables/OSM_all_covariates_summary.xlsx")
+```
