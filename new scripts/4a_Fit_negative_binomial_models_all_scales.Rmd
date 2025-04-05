@@ -1,6 +1,6 @@
 ---
 title: "Submodels and final models"
-author: "Emerald Arthurs and Aidan Brushett"
+author: "Aidan Brushett and Emerald Arthurs"
 date: "`r Sys.Date()`"
 output: 
   html_document:
@@ -16,17 +16,17 @@ knitr::opts_chunk$set(echo = TRUE,
 
 # 0. Before you begin
 
-Emerald Arthurs
-M.Sc. Student
-University of Victoria    
-School of Environmental Studies     
-Email: [emeraldarthurs@uvic.ca](emeraldarthurs@uvic.ca)
-
 Aidan Brushett
 M.Sc. Student
 University of Victoria    
 School of Environmental Studies     
 Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+Emerald Arthurs
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [emeraldarthurs@uvic.ca](emeraldarthurs@uvic.ca)
 
 ***
 
@@ -87,6 +87,8 @@ data_scaled <- data %>%
 
 # The mean will be 0 even though we grouped first, since the mean for each buffer is still 0. 
 summary(data_scaled)
+
+rm(covs, response)
 ```
 
 # 2. Determine core model
@@ -925,7 +927,7 @@ config_int_models <- purrr::map(unique(data$buffer_dist), ~{
                         # configuration variables
                         #landscape_shei +
                         nonanthro_ed + 
-                        cfi_site_with_vegedges +
+                        cfi_site +
                         #landscape_mesh +
 
                         (1|array/site),
@@ -945,8 +947,8 @@ config_int_models <- purrr::map(unique(data$buffer_dist), ~{
                         # configuration variables
                         #landscape_shei +
                         nonanthro_ed + 
-                        cfi_site_with_vegedges +
-                        nonanthro_ed*cfi_site_with_vegedges +
+                        cfi_site +
+                        nonanthro_ed*cfi_site +
                         #landscape_mesh +
 
                         (1|array/site),
@@ -1001,12 +1003,77 @@ all_models <- bind_rows(
            'delta_subsetted' = 'delta_subset', 
            'weight_subsetted' = 'weight')
   
-  
-  
 
 write_csv(all_models, file = "./data/processed/all_models_scales_aic_with_coefficients.csv")
 ```
 
+
+```{r}
+all_models <- read_csv("./data/processed/all_models_scales_aic_with_coefficients.csv")
+```
+
+```{r}
+top_models_scale <- all_models %>%
+  
+  group_by(scale) %>%
+  
+  mutate(delta_scale = AICc - min(AICc)) %>%
+  
+  filter(delta_scale <= 2) %>%
+  
+  filter(!grepl("core", model_name)) %>%
+  
+  select(-contains("subsetted"),
+         -delta) %>%
+  
+  arrange(scale, AICc) %>%
+  
+  relocate(delta_scale, .after = AICc)
+```
+
+```{r}
+top_models_scale %>%
+  
+  select(scale, intercept:last_col()) %>%
+  
+  pivot_longer(., cols = intercept:last_col()) %>%
+  
+  drop_na(.) %>%
+  
+  group_by(scale, name) %>%
+  
+  summarize(value = mean(value)) %>%
+  
+  filter(name != "intercept") %>%
+  
+  ggplot(., aes(x = scale)) +
+  
+    geom_tile(aes(y = name, fill = value), color = "grey40") + 
+  
+    labs(x = "Spatial scale (m)",
+         y = "",
+         color = "Model-\naveraged \nCoefficient",
+         fill = "Model-\naveraged \ncoefficient",
+         size = "Model-\naveraged \nCoefficient",
+         title = "Predictors included in any top models (ΔAICc < 2)") +
+  
+    scale_x_continuous(expand = c(0,0)) +
+  
+    scale_fill_gradient2(
+      low = "blue3",
+      mid = "white",
+      high = "firebrick",
+      midpoint = 0)  +
+
+    theme_bw() + 
+  
+    theme(
+      panel.background = element_rect(fill = "grey70"),
+      panel.grid = element_blank()  # optional: removes gridlines
+    )
+
+ggsave("./figures/top_model_scale_analysis_neg_binomial.png", width = 9, height = 4.2)
+```
 
 
 
