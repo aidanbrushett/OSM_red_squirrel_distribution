@@ -108,8 +108,6 @@ data_2022 <- hfi_2022 %>%
 
 data_2023 <- hfi_2023 %>%
   left_join(veg_2023, by = c("Site", "BUFF_DIST"))
-
-
 ```
 
 

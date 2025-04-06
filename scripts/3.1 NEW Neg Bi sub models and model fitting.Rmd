@@ -192,7 +192,6 @@ natural_harvest15 <- purrr::map(seq(250, 5000, by = 250), ~{
          submodel = "NATURAL_harvest15")
 ```
 
-
 'NATURAL' sub-model 4: trees and cover
 
 remove broadleaf because it is correlated with a tree type
