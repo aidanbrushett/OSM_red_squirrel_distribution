@@ -215,14 +215,14 @@ covariate_table <- covs_to_explore %>%
       zmin = ~min(.),
       zmax = ~max(.),
       zmedian = ~median(.),
-      zq20 = ~quantile(., probs = 0.20),
-      zq80 = ~quantile(., probs = 0.80)
+      zq20 = ~quantile(., probs = 0.5),
+      zq80 = ~quantile(., probs = 0.95)
     ))
   ) %>%
         
   pivot_longer(cols = everything(), names_to = c("Covariate", ".value"), names_sep = "_z") %>%
   
-  mutate(`Median (20%, 80%)` = paste0(round(median, 2), 
+  mutate(`Median (5%, 95% quantiles)` = paste0(round(median, 2), 
                                       " (", round(q20, 2), 
                                       "–", 
                                       round(q80, 2), ")"),
@@ -237,7 +237,13 @@ covariate_table <- covs_to_explore %>%
   
   select(-mean, -min, -max, -median, -q20, -q80) %>%
   
-  mutate(Description = "")
+  mutate(Description = "") %>%
+  
+  left_join(read_csv("./tables/OSM_all_covariates_formatted_names.csv"),
+            by = "Covariate") %>%
+  
+  mutate(UglyName = Covariate,
+         Covariate = PrettyName, .keep = "unused")
 
 writexl::write_xlsx(covariate_table, "./tables/OSM_all_covariates_summary.xlsx")
 ```

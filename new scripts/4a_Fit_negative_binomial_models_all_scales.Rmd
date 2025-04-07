@@ -42,7 +42,7 @@ library(MuMIn)
 library(rphylopic)
 library(corrr)
 library(performance)
-library(PerformanceAnalytics)
+#library(PerformanceAnalytics)
 
 #`%nin%` <- Negate(`%in%`)
 ```
@@ -92,6 +92,8 @@ rm(covs, response)
 ```
 
 # 2. Determine core model
+
+**NOTE**: Sections 2 through 5 could be fit through a single giant purrr loop containing all 20ish models to save code. Breaking it up this way allowed for better exploration, tweaking, faster runtimes when investigating just comp or just config, and gave some additional insights before fitting the interaction models (section 5). For now will keep it in this format :)
 
 ```{r}
 names(data)
@@ -373,7 +375,8 @@ core_buffer <- core_models$buffer_dist[1]
 core_predictors
 core_buffer
 ```
-# 2. Composition models
+
+# 3. Composition models
 
 ```{r}
 comp_models <- purrr::map(unique(data$buffer_dist), ~{
@@ -618,7 +621,7 @@ comp_buffer
 ```
 
 
-# 3. Configuration models
+# 4. Configuration models
 
 Let's fit the configuration models
 
@@ -848,7 +851,7 @@ config_predictors
 config_buffer
 ```
 
-# 3B. Configuration interaction models
+# 5. Configuration interaction models
 
 ```{r}
 config_int_models <- purrr::map(unique(data$buffer_dist), ~{
@@ -982,7 +985,7 @@ config_int_models <- purrr::map(unique(data$buffer_dist), ~{
   arrange(delta)
 ```
 
-# 4. Combine all models into a bigass table
+# 6. Combine all models into a bigass table
 
 ```{r}
 all_models <- bind_rows(
@@ -1046,12 +1049,16 @@ top_models_scale %>%
   
   filter(name != "intercept") %>%
   
+  # Adding our non-250m increment scales messes up the figure. We're fine this way I think for now....
+  filter(scale >= 250) %>%
+  
   ggplot(., aes(x = scale)) +
   
     geom_tile(aes(y = name, fill = value), color = "grey40") + 
   
     labs(x = "Spatial scale (m)",
          y = "",
+         # Not realllyyyy model averaged since it didn't get adjusted using AIC weights 
          color = "Model-\naveraged \nCoefficient",
          fill = "Model-\naveraged \ncoefficient",
          size = "Model-\naveraged \nCoefficient",

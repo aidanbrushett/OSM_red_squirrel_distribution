@@ -42,7 +42,8 @@ library(MuMIn)
 library(rphylopic)
 library(corrr)
 library(performance)
-library(PerformanceAnalytics)
+#library(PerformanceAnalytics)
+library(broom.mixed)
 
 `%nin%` <- Negate(`%in%`)
 ```
@@ -91,6 +92,26 @@ summary(data_scaled)
 rm(covs, response)
 ```
 
+I also want to make sure we store the values we used to scale the data so that we can back-transform it into ecologically meaningful values for figures. Either it's annoying to fit models (typing scale() all the time or annoying to make plots. Might have been faster to write 'scale' in all the models but oh well...)
+
+```{r}
+data_scaled_summary <- data %>%
+  
+  select(buffer_dist, cfi_site:last_col()) %>%
+
+  group_by(buffer_dist) %>%
+  
+  pivot_longer(cols = 2:last_col(), values_to = "value", names_to = "variable") %>%
+  
+  group_by(buffer_dist, variable) %>%
+  
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    sd   = sd(value, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
 # 2. Scale analysis:
 
 Another nice way to visualize our results for the scale analysis is to plot the model weight for the global sub-models at each scale.
@@ -136,7 +157,7 @@ natural_scale <- purrr::map(unique(data$buffer_dist), ~{
 Anthro composition submodel:
 
 ```{r}
-comp_scale <- purrr::map(seq(250, 5000, by = 250), ~{
+comp_scale <- purrr::map(unique(data$buffer_dist), ~{
 
   # Subset the data based on the current buffer distance
   data_subset <- data_scaled %>%
@@ -176,7 +197,7 @@ comp_scale <- purrr::map(seq(250, 5000, by = 250), ~{
 
 Configuration sub-model:
 ```{r}
-config_scale <- purrr::map(seq(250, 5000, by = 250), ~{
+config_scale <- purrr::map(unique(data$buffer_dist), ~{
   
   # Subset the data based on the current buffer distance
   data_subset <- data_scaled %>%
@@ -230,12 +251,13 @@ fig_scale <- bind_rows(natural_scale,
   
     theme_bw() + 
     
-    scale_y_continuous(limits = c(0, 1), expand = expansion(add = c(0, 0.05))) + 
+    scale_y_continuous(limits = c(0, 0.51), expand = expansion(add = c(0, 0))) + 
+  
+    scale_x_continuous(expand = c(0,0)) +
   
     labs(x = "Buffer radius (m)",
          y = "AIC weight (global model)",
-         color = "Sub-model",
-         title = "RESQ: sub-model characteristic spatial scales") + 
+         color = "Covariate \ncategory") +
   
     # Remove all grid lines
     theme(panel.grid = element_blank()) + 
@@ -255,8 +277,13 @@ Identify top scales:
 
 ```{r}
 natural_scale$buffer[1]
+nat_buffer <- 100
+
 comp_scale$buffer[1]
+comp_buffer <- 4250
+
 config_scale$buffer[1]
+config_buffer <- 2250
 ```
 ## 5.1. Construct and inspect the final dataset
 
@@ -272,21 +299,21 @@ data_final_scaled <- bind_cols(
   
   # natural data
   data_scaled %>% 
-    filter(buffer_dist == natural_scale$buffer[1]) %>%
+    filter(buffer_dist == nat_buffer) %>%
     select(fire_0_15:lc_wetland_treed) %>%
-    mutate(NATURAL_buffer = natural_scale$buffer[1]), # won't use this column, just keeping track of the scale somehow
+    mutate(natural_buffer = nat_buffer), # won't use this column, just keeping track of the scale somehow
   
   # composition data
   data_scaled %>% 
-    filter(buffer_dist == comp_scale$buffer[1]) %>%
+    filter(buffer_dist == comp_buffer) %>%
     select(harvest_0_15:wells_total) %>%
-    mutate(COMP_buffer = comp_scale$buffer[1]), # won't use this column, just keeping track of the scale somehow
+    mutate(comp_buffer = comp_buffer), # won't use this column, just keeping track of the scale somehow
   
   # configuration data
   data_scaled %>% 
-    filter(buffer_dist == config_scale$buffer[1]) %>%
+    filter(buffer_dist == config_buffer) %>%
     select(contains("nonanthro") | contains("landscape") | contains("cfi")) %>%
-    mutate(CONFIG_buffer = config_scale$buffer[1]) # won't use this column, just keeping track of the scale somehow
+    mutate(config_buffer = config_buffer) # won't use this column, just keeping track of the scale somehow
   ) %>%
   
   relocate(contains("buffer"), .after=("squirrel"))
@@ -732,15 +759,26 @@ models_rank <- MuMIn::model.sel(models) %>%
   
     rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
     
-    rename(intercept = `Int`)
+    rename(intercept = `Int`) %>%
+  
+    mutate(model = rownames(.)) %>%
+
+    relocate(model)
 
 models_rank
 
 # Fetch the top model
 top_model <- get(ls(pattern = rownames(models_rank[1]))[1])
+top_model <- m_edgeXcfi
 ```
 
 # 4. Model inspection and validation
+
+Let's read in the 'pretty' names of the covariates first. These will be what we use in figures and tables. 
+
+```{r}
+covs_formatted <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+```
 
 ## Check out a general summary: 
 
@@ -778,8 +816,14 @@ performance::check_collinearity(top_model) %>%
   
   as.data.frame(.) %>%
   
+  left_join(covs_formatted, by = c("Term" = "Covariate")) %>%
+  
+  mutate(PrettyName = case_when(
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    TRUE ~ PrettyName)) %>%
+  
   # plot with ggplot
-  ggplot(aes(x = reorder(Term, VIF), # reorders from smallest VIF to largest (not sure I want like this)
+  ggplot(aes(x = reorder(PrettyName, VIF), # reorders from smallest VIF to largest (not sure I want like this)
              y = VIF)) +
   
     geom_hline(yintercept = 3, linetype='dashed', col = 'firebrick') + 
@@ -823,11 +867,17 @@ confint(top_model) %>%
   
   filter(term %nin% c('(Intercept)', 'Std.Dev.(Intercept)|array',  'Std.Dev.(Intercept)|site:array')) %>%
   
-  ggplot(., aes(x = term)) + 
+  left_join(covs_formatted, by = c("term" = "Covariate")) %>%
+  
+  mutate(PrettyName = case_when(
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    TRUE ~ PrettyName)) %>%
+  
+  ggplot(., aes(x = PrettyName)) + 
   
     geom_hline(yintercept = 1, linetype='dashed', col = 'grey20') + 
   
-    geom_errorbar(aes(x = term, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
+    geom_errorbar(aes(x = PrettyName, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
     
     # add labels
     labs(x = '',
@@ -839,31 +889,87 @@ confint(top_model) %>%
       # set theme
     theme_bw() + 
   
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +   # Rotate x-axis labels by 45 degrees
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) #+   # Rotate x-axis labels by 45 degrees
   
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 6.6,
-      y = 1.6, 
-      height = 0.22
-      )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 6.6,
+    #  y = 1.6, 
+    #  height = 0.22
+    #  )
 
-ggsave("./figures/top_model_neg_binomial_odds_ratios.png", width = 5, height = 5)
+ggsave("./figures/top_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
 ```
 
 
 
 
-## 6. Plot conditional effects for a fixed effect of interest (no interaction)
+# 6. Plot conditional effects for a fixed effect of interest (no interaction)
+
+We will use our scaling summary here to backtransform the data into ecologically meaningful values. This is a bit hacky but it works. 
+
+Decid:
 
 ```{r, eval=TRUE}
-ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
-                                                                          
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == nat_buffer,
+         variable == "lc_broadleaf")
+
+ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
   ggplot(., aes(x = x, y = predicted)) +
   
     geom_line(size = 0.5) +  # Set lines to black
   
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'dodgerblue4') +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'green3') +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = lc_broadleaf), color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "proportion broadleaf forest", 
+         y = "squirrel occurrence frequency") +
+      
+    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank()) + 
+      
+    add_phylopic(
+      uuid = get_uuid(name = "Sciurus vulgaris"),
+      x = 0.89,
+      y = 0.46, 
+      height = 0.11
+      )
+
+ggsave("./figures/top_model_neg_binomial_broadleaf.png", dpi=400, width = 6, height = 4)
+```
+
+Conifer:
+
+```{r, eval=TRUE}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == nat_buffer,
+         variable == "lc_coniferous")
+
+ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+  
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'darkolivegreen') +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = lc_coniferous), color = "grey20", inherit.aes = FALSE) +
   
     labs(x = "proportion conifer forest", 
          y = "squirrel occurrence frequency") +
@@ -876,50 +982,415 @@ ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
       
     add_phylopic(
       uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = -1.2,
+      x = 0.08,
       y = 0.4, 
       height = 0.06
       )
 
-ggsave("./figures/top_model_neg_binomial_wells.png", dpi=400, width = 6, height = 4)
+ggsave("./figures/top_model_neg_binomial_conifer.png", dpi=400, width = 6, height = 4)
+```
+Now mixed forest:
+
+```{r, eval=TRUE}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == nat_buffer,
+         variable == "lc_mixedwood")
+
+ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+  
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'forestgreen') +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = lc_mixedwood), color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "proportion mixedwood forest", 
+         y = "squirrel occurrence frequency") +
+      
+    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank()) + 
+      
+    add_phylopic(
+      uuid = get_uuid(name = "Sciurus vulgaris"),
+      x = 0.06,
+      y = 1.4, 
+      height = 0.28
+      )
+
+ggsave("./figures/top_model_neg_binomial_mixedwood.png", dpi=400, width = 6, height = 4)
+```
+
+Now fire:
+
+```{r, eval=TRUE}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == nat_buffer,
+         variable == "fire_0_15")
+
+ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+  
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'orange3') +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = fire_0_15), color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "proportion recent fire (0–15 years)", 
+         y = "squirrel occurrence frequency") +
+      
+    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank()) #+ 
+      
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 0.08,
+    #  y = 1.32, 
+    # height = 0.26
+    #  )
+
+ggsave("./figures/top_model_neg_binomial_fire.png", dpi=400, width = 6, height = 4)
+```
+
+Now cfi:
+
+```{r, eval=TRUE}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == config_buffer,
+         variable == "cfi_site")
+
+ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+  
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'red4') +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==config_buffer), aes(x = cfi_site), color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "cumulative site disturbance", 
+         y = "squirrel occurrence frequency") +
+      
+    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank()) #+ 
+      
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 0.04,
+    #  y = 5.6, 
+    #  height = 1.2
+    #  )
+
+ggsave("./figures/top_model_neg_binomial_cfi.png", dpi=400, width = 6, height = 4)
 ```
 
 # 7. Plot conditional effects for a fixed effect of interest **with** an interaction
 
 ```{r}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == config_buffer,
+         variable == "nonanthro_ed")
+
 ggeffects::ggpredict(top_model, 
                               terms = c("nonanthro_ed [all]", 
                                         paste0("cfi_site [",
-                                               quantile(data_final_scaled$cfi_site, 0.80),
+                                               quantile(data_final_scaled$cfi_site, 0.89),
                                                ", ",
                                                quantile(data_final_scaled$cfi_site, 0.20),
                                                "]"))) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
                                                                           
   ggplot(., aes(x = x, y = predicted, color = group)) +
   
     geom_line(size = 0.5) +  # Set lines to black
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.4, color = NA) +
   
-    scale_color_manual(values = c('grey30', 'grey30'), labels = c("20% quantile", "80% quantile")) +  # Keep all lines black
+    scale_color_manual(values = c('grey20', 'grey20'), 
+                      labels = c(paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$cfi_site, 0.20), 3)),
+                                 paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$cfi_site, 0.89), 3)))) +
   
-    scale_fill_manual(values = c('dodgerblue4', 'orange3'), labels = c("20% quantile", "80% quantile")) +  # Set colors for ribbons
+    scale_fill_manual(values = c('dodgerblue4', 'orange3'), 
+                      labels = c(paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$cfi_site, 0.20), 3)),
+                                 paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$cfi_site, 0.89), 3)))) +
   
-    labs(x = "Anthropogenic Edge Density", 
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==config_buffer), aes(x = nonanthro_ed), alpha = 0.5, color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "anthropogenic edge density (m per Ha)", 
          y = "expected count",
-         color = "cfi", fill = "cfi") +
+         color = "cumulative \nsite \ndisturbance", fill = "cumulative \nsite \ndisturbance") +
   
-    scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
+    scale_x_continuous(limits = c(2, 202.85), expand = c(0, 0)) +  # Remove left blank space
+  
+    scale_y_continuous(limits = c(0, 1.1), expand = c(0,0)) +
   
     theme_bw() + 
   
-    theme(panel.grid = element_blank()) + 
+    theme(panel.grid = element_blank())
   
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 4.0,
-      y = 0.45, 
-      height = 0.1
-      )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 4.0,
+    #  y = 0.45, 
+    #  height = 0.1
+    #  )
   
-ggsave("./figures/top_model_harvest_edge_interaction.png", dpi=400, width = 7, height = 4)
+ggsave("./figures/top_model_edge_cfi_interaction.png", dpi=400, width = 7, height = 4)
+
+```
+
+Do edges change the effect of site disturbance? This is a sort of backwards interpretation but I'm curious nonetheless. 
+
+```{r}
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == config_buffer,
+         variable == "cfi_site")
+
+ggeffects::ggpredict(top_model, 
+                              terms = c("cfi_site [all]", 
+                                        paste0("nonanthro_ed [",
+                                               quantile(data_final_scaled$cfi_site, 0.89),
+                                               ", ",
+                                               quantile(data_final_scaled$cfi_site, 0.20),
+                                               "]"))) %>%
+  
+  as.data.frame() %>%
+  
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+                                                                          
+  ggplot(., aes(x = x, y = predicted, color = group)) +
+  
+    geom_line(size = 0.5) +  # Set lines to black
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.4, color = NA) +
+  
+    scale_color_manual(values = c('grey20', 'grey20'), 
+                      labels = c(paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$nonanthro_ed, 0.20), 1)),
+                                 paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$nonanthro_ed, 0.80), 1)))) +
+  
+    scale_fill_manual(values = c('dodgerblue4', 'orange3'), 
+                      labels = c(paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$nonanthro_ed, 0.20), 1)),
+                                 paste0(round(quantile((data%>%filter(buffer_dist==config_buffer))$nonanthro_ed, 0.80), 1)))) +
+  
+    # Show for just the buffer distances that we want. 
+    geom_rug(data = data%>%filter(buffer_dist==config_buffer), aes(x = cfi_site), color = "grey20", inherit.aes = FALSE) +
+  
+    labs(x = "cumulative site disturbance", 
+         y = "expected count",
+         color = "edge \ndensity \n(m/Ha)", fill = "edge \ndensity \n(m/Ha)") +
+  
+    scale_x_continuous(limits = c(0, 0.229), expand = c(0, 0)) +  # Remove left blank space
+  
+    scale_y_continuous(limits = c(0, 2.0)) +
+  
+    theme_bw() + 
+  
+    theme(panel.grid = element_blank())
+  
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 4.0,
+    #  y = 0.45, 
+    #  height = 0.1
+    #  )
+  
+ggsave("./figures/top_model_cfi_edge_interaction.png", dpi=400, width = 7, height = 4)
+
+```
+
+# 8. Make a pretty AIC table:
+
+```{r}
+models_rank_table <- models_rank %>%
+  
+  select(model, 1:(which(names(.) == "df") - 1)) %>%
+  
+  pivot_longer(cols = -model, names_to = "predictor", values_to = "value") %>%
+  
+  drop_na(value) %>%
+  
+  left_join(covs_formatted, by = c("predictor" = "Covariate")) %>%
+  
+  mutate(PrettyName = case_when(
+    predictor == "cfi_site:nonanthro_ed" ~ "Edge Density × CFI",
+    TRUE ~ PrettyName)) %>%
+  
+  group_by(model) %>%
+  
+  summarize(formula = paste(PrettyName, collapse = " + ")) %>%
+  
+  mutate(formula = str_replace(formula, "NA \\+", ""),
+         formula = str_replace(formula, "NA", "1"),
+         formula = str_replace(formula, ":", " * "),
+         formula = str_replace(formula, "Fire <15 \\+ Broadleaf \\+ Coniferous \\+ Mixedwood +", "CORE ")) %>%
+  
+  left_join(models_rank %>% select(model, df:ncol(.)), 
+            by = "model") %>%
+  
+  arrange(delta) %>%
+  
+  select("Hypothesis" = "model", "Covariates" = "formula", df, AICc, "ΔAICc" = "delta", "AICw" = "weight")
+  
+writexl::write_xlsx(models_rank_table, "./tables/OSM_model_selection_summary.xlsx")
+```
+
+# 9. Make a pretty model summary table
+
+```{r}
+fixed_effects <- broom.mixed::tidy(top_model, effects = "fixed", conf.int = TRUE) %>%
+
+  mutate(across(c(estimate, std.error, statistic, p.value, conf.low, conf.high), ~ round(.x, 3))) %>%
+  
+  select(-component) %>%
+  
+  rename_with(~ c("Type", "Term", "Estimate", "SE", "z", "p", "CI Low", "CI High")) %>%
+  
+  left_join(covs_formatted, by = c("Term" = "Covariate")) %>%
+  
+  mutate(Covariate = case_when(
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    is.na(PrettyName) ~ "Intercept",
+    TRUE ~ PrettyName)) %>%
+  
+  select(-Term, -PrettyName)
+
+
+random_effects <- broom.mixed::tidy(top_model, effects = "ran_pars", conf.int = TRUE) %>%
+  
+    mutate(group = case_when(
+      group == "site:array" ~ "Site [nested]",
+      group == "array" ~ "Array",
+      TRUE ~ group),
+      
+    effect = "Random") %>%
+  
+  select("Type" = "effect", "Covariate" = group, "SD (intercept)" = "estimate")
+
+# Add a title for each table and stack them
+top_model_summary <- bind_rows(
+  tibble(Table = "Fixed Effects", fixed_effects),
+  tibble(Table = "Random Effects", random_effects)
+)
+
+writexl::write_xlsx(top_model_summary, "./tables/OSM_top_model_summary.xlsx")
+```
+
+
+# 9b. Make a pretty model summary table for the *second place* model
+
+```{r}
+fixed_effects <- broom.mixed::tidy(m_seis_wells, effects = "fixed", conf.int = TRUE) %>%
+
+  mutate(across(c(estimate, std.error, statistic, p.value, conf.low, conf.high), ~ round(.x, 3))) %>%
+  
+  select(-component) %>%
+  
+  rename_with(~ c("Type", "Term", "Estimate", "SE", "z", "p", "CI Low", "CI High")) %>%
+  
+  left_join(covs_formatted, by = c("Term" = "Covariate")) %>%
+  
+  mutate(Covariate = case_when(
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    is.na(PrettyName) ~ "Intercept",
+    TRUE ~ PrettyName)) %>%
+  
+  select(-Term, -PrettyName)
+
+fixed_effects
+
+random_effects <- broom.mixed::tidy(top_model, effects = "ran_pars", conf.int = TRUE) %>%
+  
+    mutate(group = case_when(
+      group == "site:array" ~ "Site [nested]",
+      group == "array" ~ "Array",
+      TRUE ~ group),
+      
+    effect = "Random") %>%
+  
+  select("Type" = "effect", "Covariate" = group, "SD (intercept)" = "estimate")
+
+# Add a title for each table and stack them
+top_model_summary <- bind_rows(
+  tibble(Table = "Fixed Effects", fixed_effects),
+  tibble(Table = "Random Effects", random_effects)
+)
+
+writexl::write_xlsx(top_model_summary, "./tables/OSM_second_place_model_summary.xlsx")
+```
+
+Odds ratio plots for the conditional model:
+
+```{r}
+confint(m_seis_wells) %>%
+  
+  as_tibble(rownames = "term") %>%
+  
+  set_names(c('term', 'lower', 'upper', 'estimate')) %>%
+  
+  mutate(across(c('lower', 'upper', 'estimate'), exp)) %>%
+  
+  filter(term %nin% c('(Intercept)', 'Std.Dev.(Intercept)|array',  'Std.Dev.(Intercept)|site:array')) %>%
+  
+  left_join(covs_formatted, by = c("term" = "Covariate")) %>%
+  
+  mutate(PrettyName = case_when(
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    TRUE ~ PrettyName)) %>%
+  
+  ggplot(., aes(x = PrettyName)) + 
+  
+    geom_hline(yintercept = 1, linetype='dashed', col = 'grey20') + 
+  
+    geom_errorbar(aes(x = PrettyName, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
+    
+    # add labels
+    labs(x = '',
+         y = 'Odds Ratio (standardized)') +
+    
+    # plot as bars
+    geom_point(aes(y = estimate), size = 2.5) +
+  
+      # set theme
+    theme_bw() + 
+  
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) #+   # Rotate x-axis labels by 45 degrees
+  
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 6.6,
+    #  y = 1.6, 
+    #  height = 0.22
+    #  )
+
+ggsave("./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
 ```
