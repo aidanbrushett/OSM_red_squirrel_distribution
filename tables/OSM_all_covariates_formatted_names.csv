@@ -1,0 +1,37 @@
+Covariate,PrettyName
+cfi_site,CFI
+cfi_site_with_harvest,CFI
+cfi_site_with_vegedges,CFI
+fire_0_15,Fire <15
+harvest_0_15,Harvest <15
+harvest_total,Harvest
+landscape_cai_mn,Core Area Index
+landscape_contag,Contagion
+landscape_ed,Edge Density
+landscape_mesh,Mesh Index
+landscape_np,Number of Patches
+landscape_shei,Shannon's Evenness
+landscape_siei,Simpson's Evenness
+landscape_tca,Total Core Area
+lc_broadleaf,Broadleaf
+lc_coniferous,Coniferous
+lc_herbs,Herbs
+lc_mixedwood,Mixedwood
+lc_shrubs,Shrubland
+lc_wetland,Wetland
+lc_wetland_treed,Treed Wetland
+nonanthro_cai_mn,Core Area Index (natural habitat)
+nonanthro_ed,Edge Density
+nonanthro_tca,Total Core Area (natural)
+osm_industrial,Industrial Facilities
+pct_lari_lar,Tamarack
+pct_pice_gla,White Spruce
+pct_pice_mar,Black Spruce
+pct_pinu_ban,Jack Pine
+pct_popu_tre,Trembling Aspen
+pipe_trans,Pipelines & Transmission Lines
+roads,Roads
+seismic,Seismic Lines
+wells_active,Active Well Sites
+wells_inactive,Inactive Well Sites
+wells_total,Well Sites

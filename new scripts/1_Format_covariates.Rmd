@@ -402,6 +402,7 @@ config_final <- config1 %>%
     across(contains("_np"), ~ ifelse(is.na(.), 1, .)),
     across(contains("_cai_mn"), ~ ifelse(is.na(.), 0, .)),
     across(contains("_siei"), ~ ifelse(is.na(.), 0.001, .)),
+    across(contains("_contag"), ~ ifelse(is.na(.), max(., na.rm=T), .))
   )
   
 summary(config_final)
@@ -444,6 +445,8 @@ covs_final <- covs %>%
   left_join(coords, by = c('array', 'site')) %>%
   
   relocate(array, site, array_year, lat, long, easting_12n, northing_12n, buffer_dist)
+
+summary(covs_final)
 ```
 
 

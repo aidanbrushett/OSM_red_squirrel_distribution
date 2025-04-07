@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(sf)
 library(tidyverse)
+rm(list = ls())
 ```
 
 # 1. FOREST INVENTORY DATA
@@ -265,7 +266,7 @@ for(i in 1:nrow(sites)) {
 
   sites_landcover_metrics[[i]] <- 
 
-    purrr::map_dfr(seq(250, 5000, by = 250), ~
+    purrr::map_dfr(c(50, 100, seq(250, 5000, by = 250)), ~
                      
       st_intersection(landcover_metrics,
                       st_buffer(site, .x)) %>%
@@ -377,7 +378,7 @@ for(i in 1:nrow(sites)) {
 
   sites_hfi_metrics[[i]] <- 
 
-    purrr::map_dfr(seq(250, 5000, by = 250), ~{
+    purrr::map_dfr(c(50, 100, seq(250, 5000, by = 250)), ~{
       
       site_buffer <- st_buffer(site, .x)           
 
@@ -533,8 +534,9 @@ for(i in 1:nrow(sites)){
   
   config_data_lu <- list()
 
-  for (size in seq(250, 5000, by = 250)) {
+  for (size in c(50, 100, seq(250, 5000, by = 250))) {
     
+    # this bar doesn't work now that we have 50 and 100.... put outside next time
     progress <- ((i - 1) * 20 + size/250) / (20*nrow(sites))
 
     cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer ):", round(as.numeric(difftime(Sys.time(), start_time, units = "hours")), 4) * (1 - progress) / progress, "hours remaining    ")
@@ -551,7 +553,7 @@ for(i in 1:nrow(sites)){
              # Directions set to queen's case (8)
              directions = 8,
              # Number of pixels considered to be edge
-             edge_depth = 10, # a 50 meter edge depth, in line with literature
+             edge_depth = 5, # a 25 meter edge depth, in line with literature
              # If cells ONLY neighbour the landscape boundary, count as core
              consider_boundary = TRUE, 
              # Returns NA for classes not present in sample plots
@@ -591,7 +593,7 @@ Manipulate the data into tidy format and save the results:
 ```{r}
 load("./data/raw/OSM_simple_config_landscapemetrics.RData")
 
-config_SIMPLE <- config_data %>%
+config_simple <- config_data %>%
   
   bind_rows(.) %>%
   
@@ -626,7 +628,13 @@ start_time <- Sys.time()
 
 for(i in 1:nrow(sites)){
   
+  progress <- (i - 1) / nrow(sites)
+    
   site <- sites[i,]
+  
+  cat("\r Extracting site ", i, " of ", nrow(sites), " (", site$site, "): ", 
+      round(as.numeric(difftime(Sys.time(), start_time, units = "hours")) * (1 - progress) / progress, 2), 
+      " hours remaining        ", sep = "")
   
   # Create a buffer of 5500m around the site
   # Convert the buffer to a SpatVector for use with terra
@@ -639,12 +647,8 @@ for(i in 1:nrow(sites)){
   
   config_data_lu <- list()
 
-  for (size in seq(250, 5000, by = 250)) {
-    
-    progress <- ((i - 1) * 20 + size/250) / (20*nrow(sites))
+  for (size in c(50, 100, seq(250, 5000, by = 250))) {
 
-    cat("\r Extracting site", i, "of", nrow(sites), "(", site$site, "//", size, "m buffer ):", round(as.numeric(difftime(Sys.time(), start_time, units = "hours")), 4) * (1 - progress) / progress, "hours remaining    ")
-    
     config_data_lu[[as.character(size)]] <- sample_lsm(config_local, y = site, 
              # Create the buffer and sizes of buffer (we made a loop for size above)
              shape = "circle", size = size, 
@@ -654,12 +658,14 @@ for(i in 1:nrow(sites)){
                "lsm_l_cohesion",
                "lsm_l_mesh",
                "lsm_l_shei",
-               "lsm_l_siei"
+               "lsm_l_siei",
+               "lsm_l_contag"
+               #"lsm_c_enn_mn"
                ), 
              # Directions set to queen's case (8)
              directions = 8,
              # Number of pixels considered to be edge
-             edge_depth = 10, # a 50 meter edge depth, in line with literature
+             edge_depth = 5, # a 25 meter edge depth, in line with literature
              # If cells ONLY neighbour the landscape boundary, count as core
              consider_boundary = TRUE, 
              # Returns NA for classes not present in sample plots
@@ -682,7 +688,7 @@ for(i in 1:nrow(sites)){
   }
   
   config_data[[site$site]] <- bind_rows(config_data_lu)
-  
+
 }
 
 save(config_data, file = "./data/raw/OSM_grouped_config_landscapemetrics.RData")
