@@ -13,17 +13,32 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# 0. Before you begin
+# Before you begin
 
-Aidan Brushett M.Sc. Student University of Victoria\
-School of Environmental Studies\
-Email: [aidanbrushett\@uvic.ca](aidanbrushett@uvic.ca)
+This script is number 3 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+
+This script was used to conduct the exploratory analysis for all potential landscape covariates in our dataset prior to modelling. **The raw spatial data used to develop landcover metrics is not available on GitHub but can be shared by the authors upon request.**
+
+When running these scripts, please ensure that you have downloaded the [complete GitHub repository](www.github.com/aidanbrushett/OSM-red_squirrel-distribution). This will ensure you have all the files, data, and proper folder structure you will need to run this code and associated analyses. 
+
+Also make sure you open RStudio through the R project (OSM_red_squirrel_distribution.Rproj). This will automatically set your working directory to the correct place (wherever you saved the repository) and ensure you don't have to change the file paths for some of the data. This analysis was initially run in R v4.3.0. If you have any questions or concerns, please contact one of the authors:
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+
+Emerald Arthurs
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
 
 ------------------------------------------------------------------------
 
-# 1. Setup
+# 0. Setup
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 rm(list=ls()) # start fresh :)
 
 library(tidyverse)
@@ -48,11 +63,12 @@ covs <- read_csv("./data/processed/OSM_all_covariates_HFI_SBFI_final.csv")
 names(covs)
 ```
 
-Explore covariates of interest.
+Identify the covariates of interest.
 
 ```{r}
 covs_to_explore <- covs %>%
   
+  # To keep the number of plots reasonable we'll remove some things we're 99% sure we don't want to model
   select(
     -contains("gt"),
     -railways,
@@ -67,6 +83,8 @@ covs_to_explore <- covs %>%
   relocate((1:8), sort(names(.)))
 ```
 
+# 2. Data distribution
+
 Histograms at 500 meters:
 
 ```{r}
@@ -74,6 +92,7 @@ covs_to_explore %>%
   
   filter(buffer_dist == 500) %>%
   
+  # Remove the response columns
   select(-(1:8)) %>%
   
   # use imap which will retain both the data (x) and the variable names (y)
@@ -94,7 +113,7 @@ covs_to_explore %>%
   
   # use imap which will retain both the data (x) and the variable names (y)
   imap(~ ggplot(mapping = aes(x = .x)) +
-         geom_boxplot(fill = "grey80", color = "grey20") +
+         geom_boxplot(fill = "grey70", color = "grey20") +
          labs(title = paste0(.y, ": 500m buffer"), x = .y, y = "Count") +
          theme_classic())
 ```
@@ -131,19 +150,22 @@ covs_to_explore %>%
          theme_classic())
 ```
 
+# 3. Correlation
 
 Now let's look at correlation among variables. We have a ton of variables to look at so for now we'll export to excel.
 
 ```{r message=FALSE, warning=FALSE}
 # Histograms for each buffer size
-corr_data <- purrr::map(seq(250, 5000, by = 250), 
+corr_data <- purrr::map(unique(covs_to_explore$buffer_dist), 
                         ~ covs_to_explore %>% 
                           
                           filter(buffer_dist == .x) %>%
                           
+                          # REmove the response/site columns
                           select(9:ncol(.)) %>%
                           
-                          # pairwise complete observations right now since I'm not sure how to manage all the NAs in the configuration metrics yet
+                          # pairwise complete observations right now since 
+                          # I'm not sure how to manage all the NAs in the configuration metrics yet
                           corrr::correlate(., use = "pairwise.complete.obs", 
                                            method = "spearman", 
                                            diagonal = NA, 
@@ -151,16 +173,21 @@ corr_data <- purrr::map(seq(250, 5000, by = 250),
                           
                           as_tibble() %>%
                           
+                          # REmove the bottom triangle to keep things tidy
                           mutate(across(everything(), ~ if_else(row_number() >= min(which(is.na(.))), NA, .))) %>%
                           
+                          # Get the triangle shaped properly
                           select(rev(names(.))) %>% 
                           
+                          # Term at the beginning
                           relocate(term)
                         
                         ) %>% 
   
-  set_names(paste0(seq(250, 5000, by = 250), "m"))
+  # Set the names of each list element to the buffer they represent
+  set_names(paste0(unique(covs_to_explore$buffer_dist), "m"))
 
+# Nifty function here will export each list element as a separate tab in Excel :)
 writexl::write_xlsx(corr_data, "./data/processed/OSM_all_covariates_correlation.xlsx")
 ```
 
@@ -168,7 +195,7 @@ Let's also just look at the configuration metrics in a more compact format
 
 ```{r message=FALSE, warning=FALSE}
 # Histograms for each buffer size
-corr_data_config <- purrr::map(seq(250, 5000, by = 250), 
+corr_data_config <- purrr::map(unique(covs_to_explore$buffer_dist), 
                         ~ covs_to_explore %>% 
                           
                           filter(buffer_dist == .x) %>%
@@ -181,6 +208,7 @@ corr_data_config <- purrr::map(seq(250, 5000, by = 250),
                                            diagonal = NA, 
                                            quiet = TRUE) %>%
                           
+                          # Same tidy and reformatting as above
                           as_tibble() %>%
                           
                           mutate(across(everything(), ~ if_else(row_number() >= min(which(is.na(.))), NA, .))) %>%
@@ -191,8 +219,10 @@ corr_data_config <- purrr::map(seq(250, 5000, by = 250),
                         
                         ) %>% 
   
-  set_names(paste0(seq(250, 5000, by = 250), "m"))
+  # set names to buffer distance
+  set_names(paste0(unique(covs_to_explore$buffer_dist), "m"))
 
+# Export to excel
 writexl::write_xlsx(corr_data_config, "./data/processed/OSM_all_config_covariates_correlation.xlsx")
 ```
 
@@ -202,48 +232,61 @@ writexl::write_xlsx(corr_data_config, "./data/processed/OSM_all_config_covariate
 This will need to be tweaked at the end of the process to include all variables **at the appropriate spatial scales corresponding to the top results from the dredge**. 
 
 ```{r message=FALSE, warning=FALSE}
+# This is the formatted table for the paper with max/min values, etc.
 covariate_table <- covs_to_explore %>%
   
+  # Response vars removed
   select(9:ncol(.)) %>%
   
+  # Replace NAs with zeros. 
+  # This should be redundant code at this point and could probably be deleted
   mutate(across(everything(), ~ replace_na(.x, 0))) %>%
   
-  # z used as a unique delimiter to separate during pivot wider.... hacky but it works
+  # z used as a unique delimiter `z` to separate during pivot wider.... hacky but it works
   summarise(
     across(everything(), list(
       zmean = ~mean(.),
       zmin = ~min(.),
       zmax = ~max(.),
       zmedian = ~median(.),
-      zq20 = ~quantile(., probs = 0.5),
+      zq20 = ~quantile(., probs = 0.05),
       zq80 = ~quantile(., probs = 0.95)
     ))
   ) %>%
         
   pivot_longer(cols = everything(), names_to = c("Covariate", ".value"), names_sep = "_z") %>%
   
+  # Paste into one string (as in the table) so we don't have to do it in Excel
   mutate(`Median (5%, 95% quantiles)` = paste0(round(median, 2), 
                                       " (", round(q20, 2), 
                                       "–", 
                                       round(q80, 2), ")"),
-         
+         # ...and again
          `Mean (min, max)` = paste0(round(mean, 2), 
                                     " (", round(min, 2), 
                                     "–", 
                                     round(max, 2), ")"),
          ) %>%
   
+  # Remove trails if it exists
   filter(Covariate != 'trails') %>%
   
+  # REmove unformatted columns
   select(-mean, -min, -max, -median, -q20, -q80) %>%
   
+  # Blank description column we can export later
   mutate(Description = "") %>%
   
+  # Replace the covariate names with these pretty ones that we stored in a table 
   left_join(read_csv("./tables/OSM_all_covariates_formatted_names.csv"),
             by = "Covariate") %>%
   
-  mutate(UglyName = Covariate,
+    # Swap out the names
+    mutate(UglyName = Covariate,
          Covariate = PrettyName, .keep = "unused")
 
+# End the table
 writexl::write_xlsx(covariate_table, "./tables/OSM_all_covariates_summary.xlsx")
 ```
+
+End script.

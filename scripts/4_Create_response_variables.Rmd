@@ -13,7 +13,15 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# 0. Before you begin
+# Before you begin
+
+This script is number 4 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+
+This script was used to create and explore potential response variables describing the spatial distribution of red squirrels in our study area. This includes all steps, including importing raw Timelapse 2.0 data, calculating independent detections, binning data into a variety of response variables, and summary statistics (naive occupancy, camera-trap days, etc.)
+
+When running these scripts, please ensure that you have downloaded the [complete GitHub repository](www.github.com/aidanbrushett/OSM-red_squirrel-distribution). This will ensure you have all the files, data, and proper folder structure you will need to run this code and associated analyses. 
+
+Also make sure you open RStudio through the R project (OSM_red_squirrel_distribution.Rproj). This will automatically set your working directory to the correct place (wherever you saved the repository) and ensure you don't have to change the file paths for some of the data. This analysis was initially run in R v4.3.0. If you have any questions or concerns, please contact one of the authors (in order):
 
 Aidan Brushett
 M.Sc. Student
@@ -21,9 +29,14 @@ University of Victoria
 School of Environmental Studies     
 Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
 
+Emerald Arthurs
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+
 ***
 
-# 1. Setup
+# 0. Setup
 
 ```{r}
 rm(list=ls()) # start fresh :)
@@ -42,14 +55,19 @@ summarize <- dplyr::summarize
 ```
 
 
-
 # 1. Response variables
 
+## 1.0. Import independent detection data
+
+I (Aidan) processed independent detections in a separate script that I can provide if desired. Same goes for operating days. 
+
 ```{r}
+# independent detections (30min).
 indet <- read_csv("./data/raw/OSM_independent_detections_2021_2022_2023.csv") %>%
   
   mutate(species = species %>% tolower(.))
 
+# List of days the cameras were running (excludes snow)
 operating <- read_csv("./data/raw/OSM_operating_2021_2022_2023.csv") %>%
   
   mutate(year = year(date), 
@@ -79,7 +97,7 @@ For plotting and formatting proportional monthly detections we need to create a 
                     )
 ```
 
-## 4.1. Monthly independent detections and presence-absence
+## 1.1. Monthly independent detections and presence-absence
 
 Bin the operating data monthly and retain months with \>15 days of data.
 
@@ -102,6 +120,7 @@ indet_months <- indet %>%
 
   group_by(array, site, species, month, year) %>%
   
+  # Mark a 1 for presence and count the number of rows (i.e. # of detections)
   summarize(presence = 1,
             detections = n())
 ```
@@ -132,7 +151,7 @@ Save the file:
 write_csv(presence_months, "./data/processed/OSM_monthly_detections_2021_2022_2023.csv")
 ```
 
-## 3.2. Monthly proportional presence-absence
+## 1.2. Monthly proportional presence-absence
 
 We will now create a proportional monthly variable for each species by determining how many months an animal was present, divided by the total months of data available.
 
@@ -141,6 +160,8 @@ proportional_months <- presence_months %>%
   
   group_by(array, site, species) %>%
   
+  # Count the number of rows (i.e. months)
+  # Create a row that sums the number of months present (proportional presence!)
   summarize(months_active = n(),
             months_present = sum(presence),
             .groups = 'drop')
@@ -214,10 +235,12 @@ Let's adjust the black bear data to accommodate hibernation. We want bear data t
 ```{r}
 operating_months_bears <- operating_months %>%
   
+  # Bear data from April to November
   filter(month %in% c("4", "5", "6", "7", "8", "9", "10", "11")) %>%
   
   group_by(array, site) %>%
   
+  # Count number of present months
   summarize(months_active_bears = n(),
             .groups = 'drop')
 
@@ -246,17 +269,19 @@ Clean up our workspace:
 rm(operating_months_bears, operating_months, indet_months)
 ```
 
-## 3.3. Weekly independent detections and presence-absence
+## 1.3. Weekly independent detections and presence-absence
 
 Bin the operating data weekly and retain weeks with \>4 days of data. There is a handy function to do this!! `floor_date()` takes a date-time object and rounds it down to the nearest boundary of the specified time unit, starting on Sunday (default case). In this step, we will round down our operating data to the nearest week so we can bin it. We'll re-extract the month and year fields later.
 
 ```{r}
 operating_weeks <- operating %>%
   
+  # Floor_date bins data into weeks starting on a Sunday
   mutate(week = floor_date(date, unit = "week")) %>%
   
   group_by(array, site, week) %>%
   
+  # Number of days of data in a given week
   summarize(n_days = n()) %>%
   
   filter(n_days >= 4) # retain weeks where there are 15 days of data only.
@@ -269,10 +294,12 @@ indet_weeks <- indet %>%
   
   filter(species %in% focal_species) %>%
 
+  # What week does the independent detection belong to?
   mutate(week = floor_date(event_start, unit = "week")) %>%
   
   group_by(array, site, week, species) %>%
   
+  # Mark a 1 for presence and count the number of rows (i.e. # of detections)
   summarize(presence = 1,
             detections = n(),
             .groups = 'drop')
@@ -307,7 +334,7 @@ Save the file:
 write_csv(presence_weeks, "./data/processed/OSM_weekly_detections_2021_2022_2023.csv")
 ```
 
-## 3.4. Weekly proportional presence-absence
+## 1.4. Weekly proportional presence-absence
 
 We will now create a proportional weekly variable for each species by determining how many weeks an animal was present, divided by the total weeks of data available.
 
@@ -316,6 +343,7 @@ proportional_weeks <- presence_weeks %>%
   
   group_by(array, site, species) %>%
   
+  # Total and present weeks, respectively
   summarize(weeks_active = n(),
             weeks_present = sum(presence),
             .groups = 'drop')
@@ -417,11 +445,11 @@ Clean up our workspace:
 rm(operating_weeks_bears, operating_weeks, indet_weeks)
 ```
 
-# 4. Visualize the response variables
+# 2. Visualize the response variables
 
 Let's make a couple quick figures to represent our detections and get a sense for the amount of variation between sites and between arrays.
 
-## 4.1. Monthly detections per site/array
+## 2.1. Monthly detections per site/array
 
 This is a good proxy for overall density of a species across each landscape. 
 
@@ -432,12 +460,16 @@ fig_month_det <- presence_months %>%
   
   group_by(array, species) %>%
   
+  # Total detections per array,
+  # Adjusted by the total months of operation
   summarize(total_det = sum(detections),
             total_months = n(),
             average_det = total_det / total_months) %>%
   
+  # Graph it!
   ggplot(., aes(x = array, y = average_det)) + 
   
+    # Bar plot side-by-side based on the number itself 'identity'
     geom_bar(stat = "identity", position = "dodge", fill = 'grey50') + 
   
     facet_wrap(~species, scales = 'fixed') +
@@ -460,11 +492,12 @@ fig_month_det
 ggsave("./figures/red_squirrel_monthly_detection_rate.png", width = 5, height = 4)
 ```
 
-## 4.2. Weekly detections per site/array
+## 2.2. Weekly detections per site/array
 
 This is a good proxy for overall density of a species across each landscape. Let's see if it varies much from our monthly metric. 
 
 ```{r}
+# Exact same code as above (4.1.) but with the weekly data
 fig_week_det <- presence_weeks %>%
   
   filter(species %in% c('red squirrel')) %>%
@@ -497,14 +530,12 @@ fig_week_det <- presence_weeks %>%
 fig_week_det
 ```
 
-## 4.2. Naive occupancy per array
+## 2.3. Naive occupancy per array
 
 ```{r}
 fig_occ_total <- presence_months %>%
   
   filter(species %in% c('red squirrel')) %>%
-  
-#  filter(species %in% c('red squirrel')) %>%
   
   group_by(array, site, species) %>%
   
@@ -512,6 +543,8 @@ fig_occ_total <- presence_months %>%
   
   group_by(array, species) %>%
   
+  # Number of sites present ('presence'), 
+  # Divided by the number of sites per array
   summarize(n_sites = n(), 
             n_present = sum(presence),
             naive_occ = n_present / n_sites,
@@ -519,11 +552,13 @@ fig_occ_total <- presence_months %>%
   
   ggplot(., aes(x = array)) + 
   
+    # Bar plot again
     geom_bar(aes(y = naive_occ), stat = "identity", fill = "grey50") +  # Total sites in grey
   
 #    geom_bar(aes(y = n_present), stat = "identity", fill = "firebrick") +  # Present sites in red
   
-    geom_text(aes(y = naive_occ + 0.05, label = round(naive_occ, 2)), size = 2.7, fontface = "italic") +  # Label above bars
+    # Print a label just above the bars
+    geom_text(aes(y = naive_occ + 0.05, label = round(naive_occ, 2)), size = 2.7, fontface = "italic") + 
   
     theme_bw() + 
   
@@ -547,7 +582,7 @@ ggsave("./figures/red_squirrel_naive_occupancy.png", width = 5, height = 4)
 ```
 
 
-Total naive occupancy for the study area:
+What is the total naive occupancy for the study?
 
 ```{r}
 presence_months %>%
@@ -565,7 +600,7 @@ presence_months %>%
 ```
 
 
-## 4.3. Temporal variation in detections
+## 2.4. Temporal variation in detections
 
 Does snowshoe hare density fluctuate substantially through the study period? If so, our uneven sampling among arrays (i.e., seasons and months that cameras were deployed) could create some issues. 
 
@@ -620,9 +655,9 @@ fig_seasonal_det
 
 It doesn't look too too variable to be quite honest, I think that we are likely not introducing any crazy bias into our data by using a proportional response with variable months among arrays/sites. The coolest thing to see is the huge difference in detections per site. 
 
-# 5. Summary statistics
+# 3. Summary statistics
 
-## 5.1. Cameras and camera-trap survey effort
+## 3.1. Cameras and camera-trap survey effort
 
 ```{r}
 n_camera_days <- operating %>%
@@ -656,14 +691,20 @@ mean(n_cameras$cams)
 
 ```
 
-## 5.2. Number of images and independent detections
+## 3.2. Number of images and independent detections
+
+Ideally this would have been checked in the past script where independent detections were calculated. Since we only need this for a quick and dirty reference to 
 
 ```{r}
 osm_image <- list.files(path="./data/raw/", 
                                pattern="OSM_timelapse", 
                                full.names = TRUE) %>%
-      map_dfr(.,
+  
+      # Import the timelapse data and bind them together using purrr
+      purrr::map_dfr(.,
           ~read_csv(.x,
+                    
+                   # Old code to specify column types, don't actually need it
                    col_types = cols(datetime = col_character(), # we will fix this later
                                     site = col_character(),
                                     total = col_integer(),
@@ -679,7 +720,7 @@ osm_image <- list.files(path="./data/raw/",
             
             select(-array, -camera) %>%
             
-            # Remove "Z" and "T" to brute force the timestamps
+            # Remove "Z" and "T" to brute force the timestamps where needed
             mutate(datetime = datetime %>% str_replace_all("Z", "") %>% str_replace_all("T", " "),
                    datetime = as_datetime(datetime),
                    datasource = paste0(.x),
@@ -712,7 +753,7 @@ osm_image <- list.files(path="./data/raw/",
                    empty, datasource, cameramalfunction) 
           )
 
-# Total images
+# Total images. This is all we really needed from the code above. 
 osm_image %>% nrow(.)
 
 # Images of a squirrel
@@ -722,7 +763,7 @@ osm_image %>%
          empty == FALSE) %>%
   nrow(.)
 
-# Independent detections
+# Total independent detections
 n_indet <- indet %>%
   
   group_by(species) %>%

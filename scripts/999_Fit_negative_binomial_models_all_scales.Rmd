@@ -98,7 +98,6 @@ rm(covs, response)
 ```{r}
 names(data)
 ```
-Full model will include: lc_coniferous, lc_mixedwood, lc_broadleaf, lc_shrubs, lc_wetland, lc_wetland_treed, fire_0_15
 
 First, let's try using landcover instead of tree composition first. 
 
