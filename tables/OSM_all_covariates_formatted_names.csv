@@ -1,7 +1,7 @@
 Covariate,PrettyName
-cfi_site,CFI
-cfi_site_with_harvest,CFI
-cfi_site_with_vegedges,CFI
+cfi_site,Site Disturbance
+cfi_site_with_harvest,Site Disturbance
+cfi_site_with_vegedges,Site Disturbance
 fire_0_15,Fire <15
 harvest_0_15,Harvest <15
 harvest_total,Harvest
