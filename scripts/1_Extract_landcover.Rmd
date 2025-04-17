@@ -1,5 +1,5 @@
 ---
-title: "0. Extract configuration and composition metrics"
+title: "Extract landcover covariates"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
 output: 
@@ -596,6 +596,8 @@ To do this, we will represent the landscape as a simplified raster of human and 
 -   **mean core area index of natural habitat** as a representation of disturbance relief (is most habitat edge or core?). Measures mean ratio of core to edge habitat in patches (CAI = 0 when the patch has no core area and approaches CAI = 100 with increasing percentage of core area within a patch.)
 -   **edge density of natural habitat** (as a representation of edge *created by* interfaces with human disturbances)
 -   **total core area of natural habitat** -- amount of natural habitat that is > 50 m from edges
+-   **natural habitat cohesion** -- a measure of the chances two points of a class are connected. Similar to mesh size but considers edge lengths too. So a perforated forest that's still one patch will go down.
+
 
 ```{r Extract landscapemetrics - raster w/ SIMPLE landcover classes}
 # Create a buffer of 5500m around the site
@@ -645,7 +647,8 @@ for(i in 1:nrow(sites)){
       what = c(                     # Metrics to calculate (class-level metrics)
         "lsm_c_ed",                 # Edge density
         "lsm_c_cai_mn",            # Mean core area index
-        "lsm_c_tca"                # Total core area
+        "lsm_c_tca",               # Total core area
+        "lsm_c_cohesion"           # Cohesion
         ),
       directions = 8,              # Queen's case connectivity (8 directions)
       edge_depth = 5,              # 25 m edge width (5 pixels @ 5 m resolution)
@@ -709,7 +712,6 @@ write_csv(config_simple, "./data/raw/OSM_simple_config_landscapemetrics.csv")
 This means all the original landcover classes, found in the 'all_veg_classes' i.e. 'grouped' landcover raster. We will extract:
 
 -   **landscape-scale number of patches** as a measure of patch size -- is the landscape a few large patches or many small ones? *This will need to be standardized by area post-hoc*
--   **landscape-scale cohesion** -- a measure of the probability two points of a class are connected. Similar to mesh size but considers edge lengths too. So a perforated forest that's still one patch will go down. Influenced by class-level cohesion & weighted by dominance
 -   **landscape-scale mesh size** -- the probability of two pixels on the landscape being in the same patch
 -   **landscape scale shannon evenness index** -- a relative measure of dominance
 -   **landscape scale simpson evenness index** -- a relative measure of dominance that is less sensitive to rare species
@@ -757,7 +759,7 @@ for(i in 1:nrow(sites)) {
         "lsm_l_mesh",              # Effective mesh size
         "lsm_l_shei",              # Shannon's evenness index
         "lsm_l_siei",              # Simpson's evenness index
-        "lsm_l_contag"             # Contagion index
+        "lsm_l_contag"            # Contagion index
         # "lsm_c_enn_mn"           # (Optional) Class-level mean nearest neighbour distance
         ),
       directions = 8,              # Use Queen's case (8-cell connectivity)

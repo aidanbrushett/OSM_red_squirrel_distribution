@@ -11,7 +11,7 @@
 
 <meta name="author" content="Aidan Brushett" />
 
-<meta name="date" content="2025-04-08" />
+<meta name="date" content="2025-04-16" />
 
 <title>Import and explore covariates</title>
 
@@ -1481,7 +1481,7 @@ border-radius: 0px;
 
 <h1 class="title toc-ignore">Import and explore covariates</h1>
 <h4 class="author">Aidan Brushett</h4>
-<h4 class="date">2025-04-08</h4>
+<h4 class="date">2025-04-16</h4>
 
 </div>
 
@@ -1521,31 +1521,9 @@ School of Environmental Studies</p>
 <h1>0. Setup</h1>
 <pre class="r"><code>rm(list=ls()) # start fresh :)
 
-library(tidyverse)</code></pre>
-<pre><code>## Warning: package &#39;tidyverse&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;ggplot2&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;tibble&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;tidyr&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;readr&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;purrr&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;dplyr&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;stringr&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;forcats&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Warning: package &#39;lubridate&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
-## ✔ dplyr     1.1.4     ✔ readr     2.1.5
-## ✔ forcats   1.0.0     ✔ stringr   1.5.1
-## ✔ ggplot2   3.5.1     ✔ tibble    3.2.1
-## ✔ lubridate 1.9.3     ✔ tidyr     1.3.1
-## ✔ purrr     1.0.2     
-## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-## ✖ dplyr::filter() masks stats::filter()
-## ✖ dplyr::lag()    masks stats::lag()
-## ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
-<pre class="r"><code>library(sf)</code></pre>
-<pre><code>## Warning: package &#39;sf&#39; was built under R version 4.3.3</code></pre>
-<pre><code>## Linking to GEOS 3.11.2, GDAL 3.8.2, PROJ 9.3.1; sf_use_s2() is TRUE</code></pre>
-<pre class="r"><code>library(ggplot2)
+library(tidyverse)
+library(sf)
+library(ggplot2)
 
 # These are functions that can sometimes get masked by other packages. Shouldn&#39;t be an issue and could be removed.
 select &lt;- dplyr::select
@@ -1557,23 +1535,83 @@ summarize &lt;- dplyr::summarize
 </div>
 <div id="response-variables" class="section level1">
 <h1>1. Response variables</h1>
-<div id="import-independent-detection-data" class="section level2">
-<h2>1.0. Import independent detection data</h2>
-<p>I (Aidan) processed independent detections in a separate script that
-I can provide if desired. Same goes for operating days.</p>
-<pre class="r"><code># independent detections (30min).
-indet &lt;- read_csv(&quot;./data/raw/OSM_independent_detections_2021_2022_2023.csv&quot;) %&gt;%
+<div id="import-raw-camera-data-and-survey-effort-data" class="section level2">
+<h2>1.0. Import raw camera data and survey effort data</h2>
+<p>First the raw Timelapse2 data, which is stored in separate files from
+each year. These files came from the OSM_2023_2024 repositories from the
+ACME lab.</p>
+<pre class="r"><code>osm_image &lt;- list.files(path=&quot;./data/raw/&quot;, 
+                               pattern=&quot;OSM_timelapse&quot;, 
+                               full.names = TRUE) %&gt;%
   
-  mutate(species = species %&gt;% tolower(.))</code></pre>
-<pre><code>## Rows: 34539 Columns: 8
-## ── Column specification ────────────────────────────────────────────────────────
-## Delimiter: &quot;,&quot;
-## chr  (3): array, site, species
-## dbl  (3): camera, year, month
-## dttm (2): event_start, event_end
-## 
-## ℹ Use `spec()` to retrieve the full column specification for this data.
-## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+      # Import the timelapse data and bind them together using purrr
+      purrr::map_dfr(.,
+          ~read_csv(.x,
+                    
+                   # Old code to specify column types, don&#39;t actually need it
+                   col_types = cols(datetime = col_character(), # we will fix this later
+                                    site = col_character(),
+                                    total = col_integer(),
+                                    group_count = col_integer(), 
+                                    comments = col_character(),
+                                    species = col_factor(),
+                                    otherspecify = col_character(),
+                                    snow = col_factor(),
+                                    empty = col_logical())
+          ) %&gt;%
+
+            set_names(tolower(names(.))) %&gt;%
+            
+            select(-array, -camera) %&gt;%
+            
+            # Remove &quot;Z&quot; and &quot;T&quot; to brute force the timestamps where needed
+            mutate(datetime = datetime %&gt;% str_replace_all(&quot;Z&quot;, &quot;&quot;) %&gt;% str_replace_all(&quot;T&quot;, &quot; &quot;),
+                   datetime = as_datetime(datetime),
+                   datasource = paste0(.x),
+                   year = year(datetime), 
+                   month = month(datetime),
+                   day = day(datetime)) %&gt;%
+            
+            mutate(
+              site = gsub(&quot;-&quot;, &quot;_&quot;, site) %&gt;% # First, replace the hyphen with underscore
+                gsub(&quot;_0+&quot;, &quot;_&quot;, .) %&gt;% # Then, remove leading zeros after the underscore
+                gsub(&quot; &quot;, &quot;&quot;, .) %&gt;% # Then, remove any spaces
+                gsub(&quot;LU0&quot;, &quot;LU&quot;, .) %&gt;% # Remove leading zeros from LU names for consistency
+                as.factor(.), # Then, convert back to factor
+               ) %&gt;%
+            
+            # Create some extra columns for array and camera with the cleaned site names
+            separate_wider_delim(site,
+                                 delim = &#39;_&#39;,
+                                 names = c(&#39;array&#39;, &#39;camera&#39;),
+                                 cols_remove = FALSE) %&gt;% 
+      
+            # specify format of new columns
+            mutate(
+              array = as.factor(array),
+              camera = as.factor(camera)
+              ) %&gt;%
+            
+            select(file, relativepath, array, camera, site, snow, datetime, 
+                   year, month, day, classifier, species, total, group_count, comments, 
+                   empty, datasource, cameramalfunction)
+          )</code></pre>
+<pre><code>## Warning: One or more parsing issues, call `problems()` on your data frame for details,
+## e.g.:
+##   dat &lt;- vroom(...)
+##   problems(dat)</code></pre>
+<pre class="r"><code># Total images. This is all we really needed from the code above. 
+osm_image %&gt;% nrow(.)</code></pre>
+<pre><code>## [1] 683259</code></pre>
+<pre class="r"><code># Images of a squirrel
+osm_image %&gt;%
+  
+  filter(species == &quot;Red squirrel&quot;,
+         empty == FALSE) %&gt;%
+  nrow(.)</code></pre>
+<pre><code>## [1] 7399</code></pre>
+<p>Now the camera operability data, created in the OSM_2023_2024
+repository by Aidan Brushett and Marissa Dyck.</p>
 <pre class="r"><code># List of days the cameras were running (excludes snow)
 operating &lt;- read_csv(&quot;./data/raw/OSM_operating_2021_2022_2023.csv&quot;) %&gt;%
   
@@ -1590,6 +1628,72 @@ operating &lt;- read_csv(&quot;./data/raw/OSM_operating_2021_2022_2023.csv&quot;
 ## 
 ## ℹ Use `spec()` to retrieve the full column specification for this data.
 ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+</div>
+<div id="calculate-independent-detections" class="section level2">
+<h2>1.1. Calculate independent detections</h2>
+<pre class="r"><code># set the independent detection threshold to 30 minutes
+mins &lt;- 30
+
+# prep the data for calculating independent detections
+indet &lt;- osm_image %&gt;% 
+  
+  # remove rows with no species info
+  drop_na(species) %&gt;% 
+  
+  # We want to avoid using empty group images where no animal is actually present. This could falsely alter independent detections. 
+  filter(empty == FALSE) %&gt;% 
+  
+  # select only variables of interest
+  select(array,
+         site,
+         species,
+         datetime,
+         month,
+         year) %&gt;% 
+  
+  # now we need to create a new variable called timediff
+  # first make sure data are arrange in proper order
+  arrange(site, species, datetime) %&gt;% # this will NOT work if not in correct order (early-late date)
+  
+  # create groups for each species at each site
+  group_by(species, site) %&gt;%
+  
+  # create new variable timediff that will calculate the difference 
+  mutate(timediff = as.numeric(difftime(datetime,lag(datetime),
+                                        units = &quot;mins&quot;)),
+        # Then, create an event_ID that groups detections and identifies when photos are &gt;30min apart. 
+        event_id = cumsum(if_else(is.na(timediff) | timediff &gt; mins,  # Create episode IDs to distinguish detections 
+                                  1, 
+                                  0))
+        )
+
+# now create a new data frame with a single row for each event. 
+# The timestamp corresponds to the EARLIEST image in the event. Other code could be added 
+indet &lt;- indet %&gt;% 
+  
+  group_by(array, species, site, event_id, year, month) %&gt;%
+  
+  summarize(event_start = min(datetime)) %&gt;%
+  
+  mutate(species = tolower(species))</code></pre>
+<pre><code>## `summarise()` has grouped output by &#39;array&#39;, &#39;species&#39;, &#39;site&#39;, &#39;event_id&#39;,
+## &#39;year&#39;. You can override using the `.groups` argument.</code></pre>
+<p>How many independent detections of squirrels are there?</p>
+<pre class="r"><code># Total independent detections
+n_indet &lt;- indet %&gt;%
+  
+  group_by(species) %&gt;%
+  
+  summarize(detections = n())
+
+n_indet %&gt;% filter(species == &quot;red squirrel&quot;)</code></pre>
+<pre><code>## # A tibble: 1 × 2
+##   species      detections
+##   &lt;chr&gt;             &lt;int&gt;
+## 1 red squirrel       4747</code></pre>
+</div>
+<div id="monthly-independent-detections-and-presence-absence" class="section level2">
+<h2>1.2. Monthly independent detections and presence-absence</h2>
 <p>For plotting and formatting proportional monthly detections we need
 to create a subset of the species in the detections data to just include
 several focal species we are interested in</p>
@@ -1608,9 +1712,6 @@ several focal species we are interested in</p>
                     &#39;snowshoe hare&#39;, 
                     &#39;red squirrel&#39; 
                     )</code></pre>
-</div>
-<div id="monthly-independent-detections-and-presence-absence" class="section level2">
-<h2>1.1. Monthly independent detections and presence-absence</h2>
 <p>Bin the operating data monthly and retain months with &gt;15 days of
 data.</p>
 <pre class="r"><code>operating_months &lt;- operating %&gt;%
@@ -1673,7 +1774,7 @@ summary(presence_months)</code></pre>
 <pre class="r"><code>write_csv(presence_months, &quot;./data/processed/OSM_monthly_detections_2021_2022_2023.csv&quot;)</code></pre>
 </div>
 <div id="monthly-proportional-presence-absence" class="section level2">
-<h2>1.2. Monthly proportional presence-absence</h2>
+<h2>1.3. Monthly proportional presence-absence</h2>
 <p>We will now create a proportional monthly variable for each species
 by determining how many months an animal was present, divided by the
 total months of data available.</p>
@@ -1824,7 +1925,7 @@ proportional_months &lt;- proportional_months %&gt;%
 <pre class="r"><code>rm(operating_months_bears, operating_months, indet_months)</code></pre>
 </div>
 <div id="weekly-independent-detections-and-presence-absence" class="section level2">
-<h2>1.3. Weekly independent detections and presence-absence</h2>
+<h2>1.4. Weekly independent detections and presence-absence</h2>
 <p>Bin the operating data weekly and retain weeks with &gt;4 days of
 data. There is a handy function to do this!! <code>floor_date()</code>
 takes a date-time object and rounds it down to the nearest boundary of
@@ -1908,7 +2009,7 @@ summary(presence_weeks)</code></pre>
 <pre class="r"><code>write_csv(presence_weeks, &quot;./data/processed/OSM_weekly_detections_2021_2022_2023.csv&quot;)</code></pre>
 </div>
 <div id="weekly-proportional-presence-absence" class="section level2">
-<h2>1.4. Weekly proportional presence-absence</h2>
+<h2>1.5. Weekly proportional presence-absence</h2>
 <p>We will now create a proportional weekly variable for each species by
 determining how many weeks an animal was present, divided by the total
 weeks of data available.</p>
@@ -2303,88 +2404,6 @@ sum(n_cameras$cams)</code></pre>
 <pre><code>## [1] 50</code></pre>
 <pre class="r"><code>mean(n_cameras$cams)</code></pre>
 <pre><code>## [1] 43</code></pre>
-</div>
-<div id="number-of-images-and-independent-detections" class="section level2">
-<h2>3.2. Number of images and independent detections</h2>
-<p>Ideally this would have been checked in the past script where
-independent detections were calculated. Since we only need this for a
-quick and dirty reference to</p>
-<pre class="r"><code>osm_image &lt;- list.files(path=&quot;./data/raw/&quot;, 
-                               pattern=&quot;OSM_timelapse&quot;, 
-                               full.names = TRUE) %&gt;%
-  
-      # Import the timelapse data and bind them together using purrr
-      purrr::map_dfr(.,
-          ~read_csv(.x,
-                    
-                   # Old code to specify column types, don&#39;t actually need it
-                   col_types = cols(datetime = col_character(), # we will fix this later
-                                    site = col_character(),
-                                    total = col_integer(),
-                                    group_count = col_integer(), 
-                                    comments = col_character(),
-                                    species = col_factor(),
-                                    otherspecify = col_character(),
-                                    snow = col_factor(),
-                                    empty = col_logical())
-          ) %&gt;%
-
-            set_names(tolower(names(.))) %&gt;%
-            
-            select(-array, -camera) %&gt;%
-            
-            # Remove &quot;Z&quot; and &quot;T&quot; to brute force the timestamps where needed
-            mutate(datetime = datetime %&gt;% str_replace_all(&quot;Z&quot;, &quot;&quot;) %&gt;% str_replace_all(&quot;T&quot;, &quot; &quot;),
-                   datetime = as_datetime(datetime),
-                   datasource = paste0(.x),
-                   year = year(datetime), 
-                   month = month(datetime),
-                   day = day(datetime)) %&gt;%
-            
-            mutate(
-              site = gsub(&quot;-&quot;, &quot;_&quot;, site) %&gt;% # First, replace the hyphen with underscore
-                gsub(&quot;_0+&quot;, &quot;_&quot;, .) %&gt;% # Then, remove leading zeros after the underscore
-                gsub(&quot; &quot;, &quot;&quot;, .) %&gt;% # Then, remove any spaces
-                gsub(&quot;LU0&quot;, &quot;LU&quot;, .) %&gt;% # Remove leading zeros from LU names for consistency
-                as.factor(.), # Then, convert back to factor
-               ) %&gt;%
-            
-            # Create some extra columns
-            separate_wider_delim(site,
-                                 delim = &#39;_&#39;,
-                                 names = c(&#39;array&#39;, &#39;camera&#39;),
-                                 cols_remove = FALSE) %&gt;% 
-      
-            # specify format of new columns
-            mutate(
-              array = as.factor(array),
-              camera = as.factor(camera)
-              ) %&gt;%
-            
-            select(file, relativepath, array, camera, site, snow, datetime, 
-                   year, month, day, classifier, species, total, group_count, comments, 
-                   empty, datasource, cameramalfunction) 
-          )</code></pre>
-<pre><code>## Warning: One or more parsing issues, call `problems()` on your data frame for details,
-## e.g.:
-##   dat &lt;- vroom(...)
-##   problems(dat)</code></pre>
-<pre class="r"><code># Total images. This is all we really needed from the code above. 
-osm_image %&gt;% nrow(.)</code></pre>
-<pre><code>## [1] 683259</code></pre>
-<pre class="r"><code># Images of a squirrel
-osm_image %&gt;%
-  
-  filter(species == &quot;Red squirrel&quot;,
-         empty == FALSE) %&gt;%
-  nrow(.)</code></pre>
-<pre><code>## [1] 7399</code></pre>
-<pre class="r"><code># Total independent detections
-n_indet &lt;- indet %&gt;%
-  
-  group_by(species) %&gt;%
-  
-  summarize(detections = n())</code></pre>
 </div>
 </div>
 

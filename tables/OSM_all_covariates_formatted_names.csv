@@ -35,3 +35,9 @@ seismic,Seismic Lines
 wells_active,Active Well Sites
 wells_inactive,Inactive Well Sites
 wells_total,Well Sites
+nonanthro_cohesion,Cohesion
+(Intercept),Intercept
+intercept,Intercept
+`(Intercept)`,Intercept
+((Intercept)),Intercept
+nonanthro_ed:cfi_site,Edge Density x Site Disturbance

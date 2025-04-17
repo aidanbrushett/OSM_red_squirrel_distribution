@@ -446,8 +446,8 @@ config_final <- config1 %>%
   
   # Classes for which we don't care about comp
   select(-contains("water"),
-         -contains("anthropogenic"),
-         -contains("cohesion")) %>%
+         -contains("anthropogenic")
+         ) %>%
   
   # Tidy up the column names
   rename_with(

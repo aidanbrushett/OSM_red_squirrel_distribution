@@ -633,6 +633,63 @@ m_landcover_fire <- glmmTMB(squirrel ~
                       data = data_final_scaled, 
                       family = nbinom2, 
                       na.action = na.fail)
+  
+  
+    m_cohesion <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        nonanthro_cohesion +
+                        #landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_final_scaled, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+    
+  m_cohesion_mesh <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        nonanthro_cohesion +
+                        landscape_mesh +
+
+                        (1|array/site),
+                      
+                      data = data_final_scaled, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+        
+  m_cohesion_shei <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        nonanthro_cohesion +
+                        #landscape_mesh +
+                        landscape_shei +
+
+                        (1|array/site),
+                      
+                      data = data_final_scaled, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+  
                     
   m_conn <- glmmTMB(squirrel ~ 
                         

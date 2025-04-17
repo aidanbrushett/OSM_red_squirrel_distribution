@@ -77,7 +77,11 @@ covs_to_explore <- covs %>%
     -trails,
     -veg_edges,
     -lc_water,
-    -pct_betu_pap
+    -pct_betu_pap,
+    -landscape_cohesion,
+    -landscape_ed, 
+    -landscape_cai_mn,
+    -landscape_tca
          ) %>%
   
   relocate((1:8), sort(names(.)))
@@ -233,10 +237,25 @@ This will need to be tweaked at the end of the process to include all variables 
 
 ```{r message=FALSE, warning=FALSE}
 # This is the formatted table for the paper with max/min values, etc.
-covariate_table <- covs_to_explore %>%
+covariate_table <- 
+
+  bind_cols(
   
-  # Response vars removed
-  select(9:ncol(.)) %>%
+  # natural data scaled by natural buffer
+  covs_to_explore %>% 
+    filter(buffer_dist == 100) %>%
+    select(fire_0_15, contains("lc_")), 
+  
+  # composition data scaled by composition buffer
+  covs_to_explore %>% 
+    filter(buffer_dist == 4250) %>%
+    select(harvest_0_15, harvest_total, osm_industrial, pipe_trans, roads, seismic, wells_inactive, wells_active),
+  
+  # configuration data
+  covs_to_explore %>% 
+    filter(buffer_dist == 2250) %>%
+    select(nonanthro_ed, landscape_mesh, landscape_shei, nonanthro_cohesion, cfi_site)
+  ) %>%
   
   # Replace NAs with zeros. 
   # This should be redundant code at this point and could probably be deleted
@@ -275,7 +294,8 @@ covariate_table <- covs_to_explore %>%
   select(-mean, -min, -max, -median, -q20, -q80) %>%
   
   # Blank description column we can export later
-  mutate(Description = "") %>%
+  mutate(`Modelled Scale` = "",
+         Description = "") %>%
   
   # Replace the covariate names with these pretty ones that we stored in a table 
   left_join(read_csv("./tables/OSM_all_covariates_formatted_names.csv"),
