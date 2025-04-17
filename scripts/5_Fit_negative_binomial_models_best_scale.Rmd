@@ -203,7 +203,7 @@ comp_scale <- purrr::map(unique(data$buffer_dist), ~{
   }
   ) %>%
   
-  set_names(unique(data$buffer_dist)) %>% 
+  set_names(unique(data$buffer_dist)) %>%
   
   # Model selection and AIC for each scale
   MuMIn::model.sel(comp_scale) %>%

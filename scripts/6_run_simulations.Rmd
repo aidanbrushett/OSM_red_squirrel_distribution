@@ -360,7 +360,7 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
 
 ## 2.2. Run simulations
 
-```{r}
+```{r, eval = FALSE}
 # sim_master_results <- list()
 
 # 1000 simulations with normal sampler
@@ -420,7 +420,7 @@ sim_results <- purrr::map_dfr(1:10, ~
                                     n_array = 10,
                                     n_site_per_array = 22,
                                     n_obs_per_site = 10,
-                                    sampler_type = "normal"
+                                    sampler_type = "uniform"
                                     )
                  )
 
@@ -430,13 +430,30 @@ save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
 }
 ```
 
-## 2.3. Visualize coefficients
+# 3. Visualize results of the simulations
+
+Let's take a look at the master results
 
 ```{r}
 load("./data/raw/simulation_checkpoint.RData")
 
-pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+# Fetch the simulation results
+sim_master_results_df <-  sim_master_results %>%
+    bind_rows() %>%
+    distinct() # Make sure there are no duplicate simulations. 
+    
+```
 
+Let's also import the pretty names
+
+```{r}
+pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+```
+
+
+Plot using the normal (Gaussian) sampler
+
+```{r}
 true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
 
 # Run simulations
@@ -445,10 +462,10 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   # Pretty label for the plot
   label <- (pretty_names %>% filter(Covariate == .x))$PrettyName
 
+  true_val <- (true_vals %>% filter(term==.x))$value
+
   # Fetch the simulation results
-  sim_master_results %>%
-    bind_rows() %>%
-    distinct() %>%
+  sim_master_results_df %>%
     
     # For a specific subset of simulations
     filter(sampler_type == "normal",
@@ -464,17 +481,17 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
     # Plot it
     ggplot(., aes(x = value)) + 
   
-      geom_vline(xintercept = 0, linetype = "dashed", color = "grey70") +  # Dotted vertical line at x = 0
+      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
   
       geom_density(fill = "darkred", alpha = 0.3) + 
     
-      geom_vline(xintercept = (true_vals %>% filter(term==.x))$value, 
+      geom_vline(xintercept = true_val, 
                  linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -485,13 +502,131 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
       theme(panel.grid = element_blank())  # Remove background panel grid
 })
 
-ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3)
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+  bgcolor("white")
+
+ggsave("./figures/top_model_simulations_coefficient_density_gaussian_sampler.png", width = 9, height = 6)
 ```
 
 
+Plot using the uniform distribution sampler
+
+```{r}
+pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+
+true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+
+# Run simulations
+sim_coefficient_plots <- purrr::map(true_vals$term, ~{
+  
+  # Pretty label for the plot
+  label <- (pretty_names %>% filter(Covariate == .x))$PrettyName
+
+  true_val <- (true_vals %>% filter(term==.x))$value
+  
+  # Fetch the simulation results
+  sim_master_results_df %>%
+    
+    # For a specific subset of simulations
+    filter(sampler_type == "uniform",
+           n_site_per_array == 43,
+           convergence == 0) %>%
+  
+    # Pivot to long format to make our lives easier in purrr
+    pivot_longer(., cols = 1:8) %>%
+    
+    # Coefficient values for just the variable we want
+    filter(name == .x) %>%
+    
+    # Plot it
+    ggplot(., aes(x = value)) + 
+  
+      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
+  
+      geom_density(fill = "darkred", alpha = 0.3) + 
+    
+      geom_vline(xintercept = true_val, 
+                 linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
+  
+        # Crop the axis since model weights are low
+      scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
+    
+      scale_x_continuous(limits = c(true_val-0.5, true_val+0.5), expand = c(0,0)) +
+    
+      labs(y = "", 
+           x = "", 
+           title = label) +
+    
+      theme_bw() + 
+    
+      theme(panel.grid = element_blank())  # Remove background panel grid
+})
+
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+  bgcolor("white")
+
+ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png", width = 9, height = 6)
+```
 
 
+Plot using the uniform sampler *and* reduced sample size
 
+```{r}
+pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+
+true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+
+# Run simulations
+sim_coefficient_plots <- purrr::map(true_vals$term, ~{
+  
+  # Pretty label for the plot
+  label <- (pretty_names %>% filter(Covariate == .x))$PrettyName
+
+  true_val <- (true_vals %>% filter(term==.x))$value
+  
+  # Fetch the simulation results
+  sim_master_results_df %>%
+    
+    # For a specific subset of simulations
+    filter(sampler_type == "uniform",
+           n_site_per_array == 22,
+           convergence == 0) %>%
+  
+    # Pivot to long format to make our lives easier in purrr
+    pivot_longer(., cols = 1:8) %>%
+    
+    # Coefficient values for just the variable we want
+    filter(name == .x) %>%
+    
+    # Plot it
+    ggplot(., aes(x = value)) + 
+  
+      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
+  
+      geom_density(fill = "darkred", alpha = 0.3) + 
+    
+      geom_vline(xintercept = true_val, 
+                 linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
+  
+        # Crop the axis since model weights are low
+      scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
+    
+      scale_x_continuous(limits = c(true_val-0.5, true_val+0.5), expand = c(0,0)) +
+    
+      labs(y = "", 
+           x = "", 
+           title = label) +
+    
+      theme_bw() + 
+    
+      theme(panel.grid = element_blank())  # Remove background panel grid
+})
+
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+  bgcolor("white")
+
+ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 6)
+```
 
 
 
