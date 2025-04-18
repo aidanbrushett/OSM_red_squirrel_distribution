@@ -956,6 +956,19 @@ summary(top_model)
 ## 7.2. Odds ratio plots for the conditional model:
 
 ```{r}
+# Custom order for the x-axis covariates
+custom_order <- c(
+  "Broadleaf",
+  "Mixedwood",
+  "Coniferous",
+  "Fire <15",
+  "Site Disturbance",
+  "Edge Density",
+  "Edge Density × \nSite Disturbance"
+  )
+
+odds_fig_top <- 
+  
 confint(top_model) %>%
   
   as_tibble(rownames = "term") %>%
@@ -974,8 +987,11 @@ confint(top_model) %>%
   
   # Fix a couple manually
   mutate(PrettyName = case_when(
-    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nSite Disturbance",
     TRUE ~ PrettyName)) %>%
+  
+  # Apply the custom order for covariates
+  mutate(PrettyName = factor(PrettyName, levels = custom_order)) %>%
   
   # Plot it!!
   ggplot(., aes(x = PrettyName)) + 
@@ -987,7 +1003,9 @@ confint(top_model) %>%
 
     # plot as points
     geom_point(aes(y = estimate), size = 2.5) +
-      
+  
+          scale_y_continuous(limits = c(0.4, 1.8)) + 
+
     # add labels
     labs(x = '',
          y = 'Odds Ratio (standardized)') +
@@ -1004,7 +1022,9 @@ confint(top_model) %>%
     #  height = 0.22
     #  )
 
-ggsave("./figures/top_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
+odds_fig_top
+  
+ggsave(odds_fig_top, file = "./figures/top_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
 ```
 
 
@@ -1622,6 +1642,19 @@ writexl::write_xlsx(top_model_summary, "./tables/OSM_second_place_model_summary.
 ## 12.2. Odds ratio plots for the conditional model
 
 ```{r}
+# Custom order for the x-axis covariates
+custom_order <- c(
+  "Broadleaf",
+  "Mixedwood",
+  "Coniferous",
+  "Fire <15",
+  "Inactive Well Sites",
+  "Seismic Lines",
+  "Pipelines & \nTransmission Lines"
+  )
+
+odds_fig_second <-
+
 # Exact same code as before, not annotating because I'm lazy. 
 confint(m_seis_wells) %>%
   
@@ -1637,7 +1670,10 @@ confint(m_seis_wells) %>%
   
   mutate(PrettyName = case_when(
     term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    term == "pipe_trans" ~ "Pipelines & \nTransmission Lines",
     TRUE ~ PrettyName)) %>%
+  
+  mutate(PrettyName = factor(PrettyName, levels = custom_order)) %>%
   
   ggplot(., aes(x = PrettyName)) + 
   
@@ -1647,10 +1683,12 @@ confint(m_seis_wells) %>%
     
     # add labels
     labs(x = '',
-         y = 'Odds Ratio (standardized)') +
+         y = '') +
     
     # plot as bars
     geom_point(aes(y = estimate), size = 2.5) +
+  
+    scale_y_continuous(limits = c(0.4, 1.8)) + 
   
       # set theme
     theme_bw() + 
@@ -1664,5 +1702,44 @@ confint(m_seis_wells) %>%
     #  height = 0.22
     #  )
 
-ggsave("./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
+odds_fig_second
+
+ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
 ```
+
+
+
+
+
+```{r}
+ggpubr::ggarrange(odds_fig_top, odds_fig_second, 
+                  ncol = 2, 
+                  nrow = 1,
+                  align = "h",
+                  labels = c("A", "B")  # Add plot labels
+                  )
+
+ggsave("./figures/odds_ratio_top_model_second_model.png", width = 7, height = 4.4, dpi = 500)
+
+cowplot::plot_grid(odds_fig_top, odds_fig_second, 
+                  ncol = 2,
+                  axis = 'l',
+                  align = 'h')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

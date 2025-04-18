@@ -1,6 +1,6 @@
 ---
 title: "Submodels and final models"
-author: "Aidan Brushett and Emerald Arthurs"
+author: "Aidan Brushett"
 date: "`r Sys.Date()`"
 output: 
   html_document:
@@ -628,11 +628,53 @@ ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) +
 ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 6)
 ```
 
+Let's look at some summary statistics for our empirical samples. Do they match the simulations?
+
+```{r}
+true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "mean_model")
+true_se <- enframe(summary(m_edgeXcfi)$coefficients$cond[, "Std. Error"], name = "term", value = "se_model")
+
+  # Fetch the simulation results
+sim_uniform_results <- sim_master_results_df %>%
+    
+    # For a specific subset of simulations
+    filter(sampler_type == "uniform",
+           n_site_per_array == 43,
+           convergence == 0) %>%
+  
+  select(1:8) %>%
+  
+  mutate(sim_id = row_number()) %>%
+  
+  pivot_longer(., cols = 1:8, names_to = "term") %>%
+  
+  group_by(term) %>%
+  
+  summarize(
+    mean_estimate = mean(value),
+    se_estimate = sd(value)
+  ) %>%
+  
+  left_join(true_vals, by = "term") %>%
+  
+  left_join(true_se, by = "term") %>%
+  
+  mutate(mean_bias = mean_estimate - mean_model,
+         se_ratio = se_estimate / se_model)%>%
+  
+  select(term, contains("mean"), contains("se")) %>%
+  
+  arrange(mean_bias)
+
+sim_uniform_results
+
+summary(m_edgeXcfi)
 
 
+```
 
 
-
+End script
 
 
 
