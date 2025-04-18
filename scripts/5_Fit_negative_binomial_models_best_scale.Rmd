@@ -270,7 +270,8 @@ fig_scale <- bind_rows(natural_scale,
                                  "#1976D2",
                                  "#388E3C")) + 
     
-    scale_color_manual(values =c("grey40","grey70","grey10")) +
+    scale_color_manual(values =c("grey40","grey70","grey10"),
+                       labels =c("Disturbance \ncomposition", "Configuration", "Natural \nlandcover")) +
     #scale_color_viridis_d() + 
   
     theme_bw() + 
@@ -278,26 +279,35 @@ fig_scale <- bind_rows(natural_scale,
     # Crop the axis since model weights are low
     scale_y_continuous(limits = c(0, 0.51), expand = expansion(add = c(0, 0))) + 
   
-    scale_x_continuous(expand = c(0,0)) +
+    scale_x_continuous(expand = c(0,0), limits = c(0, 5100)) +
+
+    #scale_x_log10(expand = c(0,0), limits = c(50, 5100)) +
   
     labs(x = "Buffer radius (m)",
-         y = "AIC weight (global model)",
-         color = "Covariate \ncategory") +
+         y = "AICc weight",
+         color = "Covariate subset") +
   
     # Remove all grid lines
     theme(panel.grid = element_blank()) + 
   
     # Squirrel icon for funsies. Wrong spp. but whatever. 
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 4400,
-      y = 0.88, 
-      height = 0.24
-      )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 4400,
+    # y = 0.88, 
+    # height = 0.24
+    #  ) + 
+  
+    theme(
+    legend.position = c(0.98, 0.99),         # Top-right corner
+    legend.justification = c(1, 1)     # Anchor the legend's top-right
+    )
 
 fig_scale
 
-ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", width = 7, height = 4, dpi = 500)
+ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", width = 5, height = 3.5, dpi = 500)
+
+#ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight_logscale.png", width = 7, height = 4, dpi = 500)
 ```
 ## 2.5. Identify top scales:
 
