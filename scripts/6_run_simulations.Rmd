@@ -207,6 +207,19 @@ summary(m_edgeXcfi)
 
 ## 2.1. Simulation function
 
+Manually set parameters for debugging the function (eval false)
+
+```{r, eval = FALSE}
+model = m_edgeXcfi
+original_data = data_final
+n_array = 10
+n_site_per_array = 43
+n_obs_per_site = 10
+sampler_type = "normal"
+```
+
+
+
 ```{r}
 simulate_top_model <- function(model, original_data, n_array, n_site_per_array, n_obs_per_site, sampler_type){
   
@@ -339,7 +352,9 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
       
       pivot_wider(names_from = cov) %>%
       
-      mutate(convergence = sim$fit$convergence,
+      mutate(`site:array` = sqrt(as.numeric(VarCorr(sim)$cond[[1]])),
+             array = sqrt(as.numeric(VarCorr(sim)$cond[[2]])),
+             convergence = sim$fit$convergence,
              n_array = n_array,
              n_site_per_array = n_site_per_array,
              n_obs_per_site = n_obs_per_site,
@@ -360,8 +375,16 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
 
 ## 2.2. Run simulations
 
+Erase all previous simulations: 
+
 ```{r, eval = FALSE}
-# sim_master_results <- list()
+sim_master_results <- list()
+save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
+```
+
+Run a fresh set of 1000 simulations (in batches of 10) for each combination of parameters that we want. 
+
+```{r, eval = TRUE}
 
 # 1000 simulations with normal sampler
 for(i in 1:100) {
@@ -454,7 +477,14 @@ pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
 Plot using the normal (Gaussian) sampler
 
 ```{r}
-true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+  mutate(value = sqrt(as.numeric(value)))
+
+true_vals <- bind_rows(true_vals_fixef, 
+                       true_vals_ranef)
+
 
 # Run simulations
 sim_coefficient_plots <- purrr::map(true_vals$term, ~{
@@ -473,7 +503,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
            convergence == 0) %>%
   
     # Pivot to long format to make our lives easier in purrr
-    pivot_longer(., cols = 1:8) %>%
+    pivot_longer(., cols = 1:10) %>%
     
     # Coefficient values for just the variable we want
     filter(name == .x) %>%
@@ -483,10 +513,12 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   
       geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
   
-      geom_density(fill = "darkred", alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
-                 linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
+                 linetype = "dashed", 
+                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
@@ -502,19 +534,24 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
       theme(panel.grid = element_blank())  # Remove background panel grid
 })
 
-ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_gaussian_sampler.png", width = 9, height = 6)
+ggsave("./figures/top_model_simulations_coefficient_density_gaussian_sampler.png", width =9, height = 8)
 ```
 
 
 Plot using the uniform distribution sampler
 
 ```{r}
-pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
 
-true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+  mutate(value = sqrt(as.numeric(value)))
+
+true_vals <- bind_rows(true_vals_fixef, 
+                       true_vals_ranef)
+
 
 # Run simulations
 sim_coefficient_plots <- purrr::map(true_vals$term, ~{
@@ -523,7 +560,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   label <- (pretty_names %>% filter(Covariate == .x))$PrettyName
 
   true_val <- (true_vals %>% filter(term==.x))$value
-  
+
   # Fetch the simulation results
   sim_master_results_df %>%
     
@@ -533,7 +570,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
            convergence == 0) %>%
   
     # Pivot to long format to make our lives easier in purrr
-    pivot_longer(., cols = 1:8) %>%
+    pivot_longer(., cols = 1:10) %>%
     
     # Coefficient values for just the variable we want
     filter(name == .x) %>%
@@ -543,15 +580,17 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   
       geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
   
-      geom_density(fill = "darkred", alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
-                 linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
+                 linetype = "dashed", 
+                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(limits = c(true_val-0.5, true_val+0.5), expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -562,7 +601,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
       theme(panel.grid = element_blank())  # Remove background panel grid
 })
 
-ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
 ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png", width = 9, height = 6)
@@ -572,9 +611,14 @@ ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png"
 Plot using the uniform sampler *and* reduced sample size
 
 ```{r}
-pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
 
-true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+  mutate(value = sqrt(as.numeric(value)))
+
+true_vals <- bind_rows(true_vals_fixef, 
+                       true_vals_ranef)
+
 
 # Run simulations
 sim_coefficient_plots <- purrr::map(true_vals$term, ~{
@@ -583,7 +627,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   label <- (pretty_names %>% filter(Covariate == .x))$PrettyName
 
   true_val <- (true_vals %>% filter(term==.x))$value
-  
+
   # Fetch the simulation results
   sim_master_results_df %>%
     
@@ -593,7 +637,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
            convergence == 0) %>%
   
     # Pivot to long format to make our lives easier in purrr
-    pivot_longer(., cols = 1:8) %>%
+    pivot_longer(., cols = 1:10) %>%
     
     # Coefficient values for just the variable we want
     filter(name == .x) %>%
@@ -603,15 +647,17 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
   
       geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
   
-      geom_density(fill = "darkred", alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
-                 linetype = "dashed", color = "darkred", linewidth=0.8) +  # Dotted vertical line at x = 0
+                 linetype = "dashed", 
+                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(limits = c(true_val-0.5, true_val+0.5), expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -622,7 +668,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
       theme(panel.grid = element_blank())  # Remove background panel grid
 })
 
-ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 3) + 
+ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
 ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 6)

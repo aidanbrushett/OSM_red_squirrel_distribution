@@ -781,6 +781,51 @@ fig_seasonal_det <- presence_months %>%
 fig_seasonal_det
 ```
 
+## 2.5. Figure of the response variable (monthly dets)
+
+```{r}
+presence_months %>%
+  filter(species == "red squirrel") %>%
+  
+ggplot(., aes(x = array, y = detections)) + 
+  
+  geom_jitter(width = 0.3, alpha = 0.2, color = "darkred") + 
+  
+  #geom_boxplot() +
+  
+  labs(x = "array", 
+       y = "monthly detections per site") + 
+  
+  theme_bw() + 
+  
+  theme(
+       axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+       strip.background = element_blank(),  # Remove facet background
+       panel.grid = element_blank(),
+       strip.text = element_text(face = "bold", size = 10)
+       ) + 
+  
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +  # Remove bottom space, keep small top space
+  
+  rphylopic::add_phylopic(
+    uuid = get_uuid(name = "Sciurus vulgaris"),
+    x = 9.5,
+    y = 60, 
+    height = 16
+    )
+
+ggsave(file = "./figures/allarrays_monthly_detections.png", width = 5, height = 3.2, dpi = 500)
+
+# how many camera months and mean monthly detections?
+presence_months %>%
+  filter(species == "red squirrel") %>% 
+  summarize(n_months = n(), 
+            mean_detections = mean(detections))
+
+```
+
+
+
 It doesn't look too too variable to be quite honest, I think that we are likely not introducing any crazy bias into our data by using a proportional response with variable months among arrays/sites. The coolest thing to see is the huge difference in detections per site. 
 
 # 3. Summary statistics
@@ -812,6 +857,7 @@ n_cameras <- n_camera_days %>%
   
   summarize(cams = n())
 
+sd(n_cameras$cams)
 sum(n_cameras$cams)
 min(n_cameras$cams)
 max(n_cameras$cams)

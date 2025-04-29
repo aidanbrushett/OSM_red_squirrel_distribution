@@ -41,3 +41,5 @@ intercept,Intercept
 `(Intercept)`,Intercept
 ((Intercept)),Intercept
 nonanthro_ed:cfi_site,Edge Density x Site Disturbance
+site:array,Site Random Intercept
+array,Array Random Intercept
