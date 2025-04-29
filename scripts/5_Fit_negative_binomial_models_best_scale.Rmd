@@ -1358,6 +1358,18 @@ ggeffects::ggpredict(
       )
     ) +
   
+  # OR JUST LABEL THEM AS QUANTILES 
+  
+      # Manually assign colors to line and fill for visual distinction
+    scale_color_manual(
+      values = c('grey20', 'grey20'),  # Lines stay neutral
+      labels = c("10% quantile", "90% quantile")
+    ) +
+    scale_fill_manual(
+      values = c('dodgerblue4', 'orange3'),  # Fill colors for clarity
+      labels = c("10% quantile", "90% quantile")
+    ) +
+  
     # Rug plot shows actual values of edge density in the unscaled data
     geom_rug(
       data = data %>% filter(buffer_dist == config_buffer),
@@ -1381,15 +1393,15 @@ ggeffects::ggpredict(
   
     # Clean, minimal theme
     theme_bw() + 
-    theme(panel.grid = element_blank())
+    theme(panel.grid = element_blank()) +
   
     # Optional: add a squirrel icon again for flair :)
-    # add_phylopic(
-    #   uuid = get_uuid(name = "Sciurus vulgaris"),
-    #   x = 4.0,
-    #   y = 0.45, 
-    #   height = 0.1
-    # )
+     add_phylopic(
+       uuid = get_uuid(name = "Sciurus vulgaris"),
+       x = 180,
+       y = 0.95, 
+       height = 0.20
+     )
 
 # Save it!
 ggsave("./figures/top_model_edge_cfi_interaction.png", dpi = 400, width = 7, height = 4)

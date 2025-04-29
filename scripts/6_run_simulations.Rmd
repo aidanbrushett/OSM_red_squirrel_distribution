@@ -604,7 +604,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
 ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png", width = 9, height = 6)
+ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png", width = 9, height = 8)
 ```
 
 
@@ -671,7 +671,7 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
 ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 6)
+ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 8)
 ```
 
 Let's look at some summary statistics for our empirical samples. Do they match the simulations?
