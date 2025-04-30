@@ -2,6 +2,7 @@
 title: "Submodels and final models"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
+output: "pdf_document"
 output: 
   html_document:
     theme: default
@@ -239,23 +240,35 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
 
   if(sampler_type == "normal"){
     # Generate data values based on normal distribution
-    fire_0_15 <- rnorm(100000, mean = mean(original_data$fire_0_15), sd = sd(original_data$fire_0_15))
-    lc_broadleaf <- rnorm(100000, mean = mean(original_data$lc_broadleaf), sd = sd(original_data$lc_broadleaf))
-    lc_coniferous <- rnorm(100000, mean = mean(original_data$lc_coniferous), sd = sd(original_data$lc_coniferous))
-    lc_mixedwood <- rnorm(100000, mean = mean(original_data$lc_mixedwood), sd = sd(original_data$lc_mixedwood))
-    nonanthro_ed <- rnorm(100000, mean = mean(original_data$nonanthro_ed), sd = sd(original_data$nonanthro_ed))
-    cfi_site <- rnorm(100000, mean = mean(original_data$cfi_site), sd = sd(original_data$cfi_site))
+    fire_0_15 <- rnorm(100000, mean = mean(original_data$fire_0_15), 
+                       sd = sd(original_data$fire_0_15))
+    lc_broadleaf <- rnorm(100000, mean = mean(original_data$lc_broadleaf), 
+                          sd = sd(original_data$lc_broadleaf))
+    lc_coniferous <- rnorm(100000, mean = mean(original_data$lc_coniferous), 
+                           sd = sd(original_data$lc_coniferous))
+    lc_mixedwood <- rnorm(100000, mean = mean(original_data$lc_mixedwood), 
+                          sd = sd(original_data$lc_mixedwood))
+    nonanthro_ed <- rnorm(100000, mean = mean(original_data$nonanthro_ed), 
+                          sd = sd(original_data$nonanthro_ed))
+    cfi_site <- rnorm(100000, mean = mean(original_data$cfi_site), 
+                      sd = sd(original_data$cfi_site))
   }
   
   
   if(sampler_type == "uniform"){
     # Generate data values based on uniform distribution
-    fire_0_15 <- runif(100000, min = min(original_data$fire_0_15), max = max(original_data$fire_0_15))
-    lc_broadleaf <- runif(100000, min = min(original_data$lc_broadleaf), max = max(original_data$lc_broadleaf))
-    lc_coniferous <- runif(100000, min = min(original_data$lc_coniferous), max = max(original_data$lc_coniferous))
-    lc_mixedwood <- runif(100000, min = min(original_data$lc_mixedwood), max = max(original_data$lc_mixedwood))
-    nonanthro_ed <- runif(100000, min = min(original_data$nonanthro_ed), max = max(original_data$nonanthro_ed))
-    cfi_site <- runif(100000, min = min(original_data$cfi_site), max = max(original_data$cfi_site))
+    fire_0_15 <- runif(100000, min = min(original_data$fire_0_15), 
+                       max = max(original_data$fire_0_15))
+    lc_broadleaf <- runif(100000, min = min(original_data$lc_broadleaf), 
+                          max = max(original_data$lc_broadleaf))
+    lc_coniferous <- runif(100000, min = min(original_data$lc_coniferous), 
+                           max = max(original_data$lc_coniferous))
+    lc_mixedwood <- runif(100000, min = min(original_data$lc_mixedwood), 
+                          max = max(original_data$lc_mixedwood))
+    nonanthro_ed <- runif(100000, min = min(original_data$nonanthro_ed), 
+                          max = max(original_data$nonanthro_ed))
+    cfi_site <- runif(100000, min = min(original_data$cfi_site), 
+                      max = max(original_data$cfi_site))
   }
   
   data_sim <- tibble(
@@ -276,12 +289,18 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
     
     # Scale the data using the original scaled values
     mutate(
-      fire_0_15 = (fire_0_15 - mean(original_data$fire_0_15, na.rm = TRUE)) / sd(original_data$fire_0_15, na.rm = TRUE),
-      lc_broadleaf = (lc_broadleaf - mean(original_data$lc_broadleaf, na.rm = TRUE)) / sd(original_data$lc_broadleaf, na.rm = TRUE),
-      lc_coniferous = (lc_coniferous - mean(original_data$lc_coniferous, na.rm = TRUE)) / sd(original_data$lc_coniferous, na.rm = TRUE),
-      lc_mixedwood = (lc_mixedwood - mean(original_data$lc_mixedwood, na.rm = TRUE)) / sd(original_data$lc_mixedwood, na.rm = TRUE),
-      nonanthro_ed = (nonanthro_ed - mean(original_data$nonanthro_ed, na.rm = TRUE)) / sd(original_data$nonanthro_ed, na.rm = TRUE),
-      cfi_site = (cfi_site - mean(original_data$cfi_site, na.rm = TRUE)) / sd(original_data$cfi_site, na.rm = TRUE)
+      fire_0_15 = (fire_0_15 - mean(original_data$fire_0_15, na.rm = TRUE)) / 
+        sd(original_data$fire_0_15, na.rm = TRUE),
+      lc_broadleaf = (lc_broadleaf - mean(original_data$lc_broadleaf, na.rm = TRUE)) / 
+        sd(original_data$lc_broadleaf, na.rm = TRUE),
+      lc_coniferous = (lc_coniferous - mean(original_data$lc_coniferous, na.rm = TRUE)) / 
+        sd(original_data$lc_coniferous, na.rm = TRUE),
+      lc_mixedwood = (lc_mixedwood - mean(original_data$lc_mixedwood, na.rm = TRUE)) / 
+        sd(original_data$lc_mixedwood, na.rm = TRUE),
+      nonanthro_ed = (nonanthro_ed - mean(original_data$nonanthro_ed, na.rm = TRUE)) / 
+        sd(original_data$nonanthro_ed, na.rm = TRUE),
+      cfi_site = (cfi_site - mean(original_data$cfi_site, na.rm = TRUE)) / 
+        sd(original_data$cfi_site, na.rm = TRUE)
     ) %>%
     
     mutate(array = paste0("Array", rep(1:n_array, each = n_site_per_array)),
@@ -384,7 +403,7 @@ save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
 
 Run a fresh set of 1000 simulations (in batches of 10) for each combination of parameters that we want. 
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 
 # 1000 simulations with normal sampler
 for(i in 1:100) {
@@ -476,10 +495,12 @@ pretty_names <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
 
 Plot using the normal (Gaussian) sampler
 
-```{r}
-true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+```{r, eval = FALSE}
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, 
+                           name = "term", value = "value")
 
-true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, 
+                           name = "term", value = "value") %>%
   mutate(value = sqrt(as.numeric(value)))
 
 true_vals <- bind_rows(true_vals_fixef, 
@@ -510,20 +531,23 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
     
     # Plot it
     ggplot(., aes(x = value)) + 
+  # Dotted vertical line at x = 0
+      geom_vline(xintercept = 0, color = "grey70") +  
   
-      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
-  
-      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE,
+                                 "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
                  linetype = "dashed", 
-                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 color = ifelse(str_detect(label, "Random")==TRUE,
+                                "darkblue", "darkred"), 
                  linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), 
+                         expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -537,16 +561,19 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
 ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_gaussian_sampler.png", width =9, height = 8)
+ggsave("./figures/top_model_simulations_coefficient_density_gaussian_sampler.png", 
+       width =9, height = 8)
 ```
 
 
 Plot using the uniform distribution sampler
 
-```{r}
-true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+```{r fig.height=6, fig.width=7}
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, 
+                           name = "term", value = "value")
 
-true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, 
+                           name = "term", value = "value") %>%
   mutate(value = sqrt(as.numeric(value)))
 
 true_vals <- bind_rows(true_vals_fixef, 
@@ -578,19 +605,22 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
     # Plot it
     ggplot(., aes(x = value)) + 
   
-      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
+      geom_vline(xintercept = 0, color = "grey70") +
   
-      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE,
+                                 "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
                  linetype = "dashed", 
-                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 color = ifelse(str_detect(label, "Random")==TRUE,
+                                "darkblue", "darkred"), 
                  linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75),
+                         expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -604,16 +634,19 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
 ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png", width = 9, height = 8)
+ggsave("./figures/top_model_simulations_coefficient_density_uniform_sampler.png",
+       width = 9, height = 8)
 ```
 
 
 Plot using the uniform sampler *and* reduced sample size
 
-```{r}
-true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "value")
+```{r, eval = FALSE}
+true_vals_fixef <- enframe(fixef(m_edgeXcfi)$cond, 
+                           name = "term", value = "value")
 
-true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, name = "term", value = "value") %>%
+true_vals_ranef <- enframe(VarCorr(m_edgeXcfi)$cond, 
+                           name = "term", value = "value") %>%
   mutate(value = sqrt(as.numeric(value)))
 
 true_vals <- bind_rows(true_vals_fixef, 
@@ -645,19 +678,22 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
     # Plot it
     ggplot(., aes(x = value)) + 
   
-      geom_vline(xintercept = 0, color = "grey70") +  # Dotted vertical line at x = 0
+      geom_vline(xintercept = 0, color = "grey70") +  
   
-      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), alpha = 0.3) + 
+      geom_density(fill = ifelse(str_detect(label, "Random")==TRUE,
+                                 "darkblue", "darkred"), alpha = 0.3) + 
     
       geom_vline(xintercept = true_val, 
                  linetype = "dashed", 
-                 color = ifelse(str_detect(label, "Random")==TRUE, "darkblue", "darkred"), 
+                 color = ifelse(str_detect(label, "Random")==TRUE,
+                                "darkblue", "darkred"), 
                  linewidth=0.8) +  # Dotted vertical line at x = 0
   
         # Crop the axis since model weights are low
       scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
     
-      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), expand = c(0,0)) +
+      scale_x_continuous(limits = c(true_val-0.75, true_val+0.75), 
+                         expand = c(0,0)) +
     
       labs(y = "", 
            x = "", 
@@ -671,14 +707,17 @@ sim_coefficient_plots <- purrr::map(true_vals$term, ~{
 ggpubr::ggarrange(plotlist = sim_coefficient_plots, ncol = 3, nrow = 4) + 
   bgcolor("white")
 
-ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", width = 9, height = 8)
+ggsave("./figures/top_model_simulations_coefficient_density_reduced_sample_size.png", 
+       width = 9, height = 8)
 ```
 
 Let's look at some summary statistics for our empirical samples. Do they match the simulations?
 
 ```{r}
-true_vals <- enframe(fixef(m_edgeXcfi)$cond, name = "term", value = "mean_model")
-true_se <- enframe(summary(m_edgeXcfi)$coefficients$cond[, "Std. Error"], name = "term", value = "se_model")
+true_vals <- enframe(fixef(m_edgeXcfi)$cond, 
+                     name = "term", value = "mean_model")
+true_se <- enframe(summary(m_edgeXcfi)$coefficients$cond[, "Std. Error"], 
+                   name = "term", value = "se_model")
 
   # Fetch the simulation results
 sim_uniform_results <- sim_master_results_df %>%

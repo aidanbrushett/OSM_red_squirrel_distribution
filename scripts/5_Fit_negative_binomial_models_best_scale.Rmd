@@ -896,12 +896,12 @@ summary(top_model)
 performance::r2(top_model)
 ```
 
-
 ## 6.3. Check dispersion:
 
 ```{r}
 performance::check_overdispersion(top_model)
 ```
+
 *Previous notes from fitting proportional binomial models:* "The model is overdispersed. Variance is much higher than the mean which violates an assumption of the bernoilli distribution. A zero inflated bernoulli (ZIB) might be more appropriate. Re-binning the data into monthly occurrence frequency might also help eliminate a lot of the zeros that are (likely) the cause of this."
 
 ## 6.4. Check other diagnostics including VIFs. 
@@ -953,6 +953,36 @@ performance::check_collinearity(top_model) %>%
 
 ggsave("./figures/top_model_neg_binomial_VIF.png", dpi=500, width = 5, height = 3.5)
 ```
+
+## 6.6. Likelihood ratio test for random effect structure:
+
+```{r}
+  m_edgeXcfi_noranef <- glmmTMB(squirrel ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site +
+                        nonanthro_ed*cfi_site,
+                        #landscape_mesh +
+
+                        #(1|array/site),
+
+                      data = data_final_scaled, 
+                      family = nbinom2, 
+                      na.action = na.fail)
+
+summary(m_edgeXcfi_noranef)
+
+anova(m_edgeXcfi_noranef, m_edgeXcfi)
+```
+
 
 
 # 7. Interpret results
