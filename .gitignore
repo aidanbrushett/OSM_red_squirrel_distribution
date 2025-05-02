@@ -76,3 +76,4 @@ maps/HFI_clipped/
 # Raster folder (HUGE)
 **/rasters/
 rasters/
+data/processed/OSM_all_covariates_correlation_new.xlsx
