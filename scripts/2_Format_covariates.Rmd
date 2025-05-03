@@ -1,17 +1,27 @@
 ---
-title: "Format covariates"
+title: "Format landscape covariates"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
-output: 
+output:
+  pdf_document:
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",      # Set Arial for main text
+      ]
   html_document:
     theme: default
+    highlight: tango
     toc: yes
     toc_float: yes
 ---
 
 # Before you begin
 
-This script is number 2 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+This script is number 2 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
 
 This script was used to append, combine, and rename the landscape metrics for all sites in the study that were extracted in the previous script. **The raw spatial data used to develop landcover metrics is not available on GitHub but can be shared by the authors upon request.**
 
@@ -23,7 +33,7 @@ Aidan Brushett
 M.Sc. Student
 University of Victoria    
 School of Environmental Studies     
-Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+Email: **[aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)**
 
 Emerald Arthurs
 M.Sc. Student

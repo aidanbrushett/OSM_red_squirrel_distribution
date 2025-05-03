@@ -1,21 +1,32 @@
 ---
-title: "Import and explore covariates"
+title: "Import and explore response variables"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
 output: 
+  pdf_document:
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",      # Set Arial for main text
+      ]
   html_document:
     theme: default
+    highlight: tango
     toc: yes
     toc_float: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      paged.print = TRUE)
 ```
 
 # Before you begin
 
-This script is number 4 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+This script is number 4 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
 
 This script was used to create and explore potential response variables describing the spatial distribution of red squirrels in our study area. This includes all steps, including importing raw Timelapse 2.0 data, calculating independent detections, binning data into a variety of response variables, and summary statistics (naive occupancy, camera-trap days, etc.)
 
@@ -44,6 +55,7 @@ rm(list=ls()) # start fresh :)
 library(tidyverse)
 library(sf)
 library(ggplot2)
+library(rphylopic)
 
 # These are functions that can sometimes get masked by other packages. Shouldn't be an issue and could be removed.
 select <- dplyr::select
@@ -730,7 +742,7 @@ presence_months %>%
 
 ## 2.4. Temporal variation in detections
 
-Does snowshoe hare density fluctuate substantially through the study period? If so, our uneven sampling among arrays (i.e., seasons and months that cameras were deployed) could create some issues. 
+Does red squirrel density fluctuate substantially through the study period? If so, our uneven sampling among arrays (i.e., seasons and months that cameras were deployed) could create some issues. 
 
 ```{r}
 fig_seasonal_det <- presence_months %>%

@@ -1,10 +1,20 @@
 ---
-title: "Submodels and final models"
+title: "Scale analysis and final models"
 author: "Aidan Brushett and Emerald Arthurs"
 date: "`r Sys.Date()`"
-output: 
+output:
+  pdf_document:
+    
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",]      # Set Arial for main text
   html_document:
     theme: default
+    highlight: tango
     toc: yes
     toc_float: yes
 ---
@@ -17,7 +27,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 # Before you begin
 
-This script is number 5 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+This script is number 5 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
 
 This script was used to fit, evaluate, and visualize all models of landscape structure and its influence on the spatial distribution of red squirrels in our study area. This includes all model fitting, model selection, diagnostics, and effects plots. 
 
@@ -29,7 +39,7 @@ Aidan Brushett
 M.Sc. Student
 University of Victoria    
 School of Environmental Studies     
-Email: [aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)
+Email: **[aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)**
 
 Emerald Arthurs
 M.Sc. Student
@@ -53,6 +63,8 @@ library(corrr)
 library(performance)
 #library(PerformanceAnalytics)
 library(broom.mixed)
+library(cowplot)
+library(writexl)
 
 `%nin%` <- Negate(`%in%`)
 ```
@@ -149,8 +161,8 @@ natural_scale <- purrr::map(unique(data$buffer_dist), ~{
                         lc_coniferous + 
                         lc_mixedwood + 
                         lc_broadleaf +
-                        #lc_shrubs +
-                        #lc_herbs +
+                        lc_shrubs +
+                        lc_herbs +
                         fire_0_15 + 
 
                         (1|array/site),
@@ -263,21 +275,21 @@ fig_scale <- bind_rows(natural_scale,
   # Plot the model weights as a line.
   ggplot(., aes(x = buffer, y = weight, color = submodel)) + 
   
-    geom_line(size = 1) + 
+    geom_line(size = 1, alpha = 0.7) + 
   
     # Old color scheme I didn't like (overwritten)
     scale_color_manual(values =c("#D24D57",
                                  "#1976D2",
                                  "#388E3C")) + 
     
-    scale_color_manual(values =c("grey40","grey70","grey10"),
+    scale_color_manual(values =c("goldenrod2","darkblue","forestgreen"),
                        labels =c("Disturbance \ncomposition", "Configuration", "Natural \nlandcover")) +
     #scale_color_viridis_d() + 
   
     theme_bw() + 
     
     # Crop the axis since model weights are low
-    scale_y_continuous(limits = c(0, 0.51), expand = expansion(add = c(0, 0))) + 
+    scale_y_continuous(limits = c(0, 0.41), expand = expansion(add = c(0, 0))) + 
   
     scale_x_continuous(expand = c(0,0), limits = c(0, 5100)) +
 
@@ -291,12 +303,12 @@ fig_scale <- bind_rows(natural_scale,
     theme(panel.grid = element_blank()) + 
   
     # Squirrel icon for funsies. Wrong spp. but whatever. 
-    #add_phylopic(
-    #  uuid = get_uuid(name = "Sciurus vulgaris"),
-    #  x = 4400,
-    # y = 0.88, 
-    # height = 0.24
-    #  ) + 
+    add_phylopic(
+      uuid = get_uuid(name = "Sciurus vulgaris"),
+      x = 3000,
+     y = 0.34, 
+     height = 0.09
+      ) + 
   
     theme(
     legend.position = c(0.98, 0.99),         # Top-right corner
@@ -309,19 +321,26 @@ ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", widt
 
 #ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight_logscale.png", width = 7, height = 4, dpi = 500)
 ```
+
 ## 2.5. Identify top scales:
 
+What are the numbers from the above scale analysis?
+
 ```{r}
-# Pull from the model or specify manually. Manual means we don't need to re-run this every time. 
 natural_scale$buffer[1]
-nat_buffer <- 100
-
 comp_scale$buffer[1]
-comp_buffer <- 4250
-
 config_scale$buffer[1]
+```
+
+Store them manually here before we move to the next step.
+
+```{r}
+# Let's specify these values manually. This means we don't need to re-run this every time we open a new R session. 
+nat_buffer <- 100
+comp_buffer <- 4250
 config_buffer <- 2250
 ```
+
 # 3. Construct the final dataset (best spatial scales)
 
 We will pull out the predictors from the submodels **at the appropriate spatial scales** and merge this into one big dataset for final models. This selects a couple extra columns that we don't actually want to model but that's fine, this was efficient *#sueme*
@@ -353,9 +372,62 @@ data_final_scaled <- bind_cols(
     mutate(config_buffer = config_buffer) # won't use this column, just keeping track of the scale somehow
   ) %>%
   
-  relocate(contains("buffer"), .after=("squirrel"))
+  relocate(contains("buffer"), .after=("squirrel")) %>%
+  
+  select(-landscape_ed, -landscape_tca, -landscape_cai_mn)
 
 summary(data_final_scaled)
+```
+Let's look at the correlation among this final set of candidate variables at their respective spatial scales:
+
+```{r}
+data_final_corr <- data_final_scaled %>%
+  
+  select(9:ncol(.)) %>%
+  
+  corrr::correlate(., use = "pairwise.complete.obs", 
+                                           method = "pearson", 
+                                           diagonal = NA, 
+                                           quiet = TRUE) %>%
+  as_tibble() %>%
+                          
+  mutate(across(everything(), ~ if_else(row_number() >= min(which(is.na(.))), NA, .))) %>%
+
+  select(rev(names(.))) %>% 
+
+  relocate(term) %>%
+  
+  pivot_longer(cols = -term, names_to = "var2", values_to = "corr") %>%
+  
+  rename(var1 = term) %>%
+  
+  arrange(desc(abs(corr))) %>%
+  
+  drop_na(.)
+
+head(data_final_corr, 15)
+```
+
+Let's make a table for the Supporting Information to show high correlations. 
+
+```{r, eval = FALSE}
+covs_formatted <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+
+xxx <- data_final_corr %>% 
+  filter(var1 != "cfi_site_with_harvest" & var2 != "cfi_site_with_harvest",
+         var1 != "cfi_site_with_vegedges" & var2 != "cfi_site_with_vegedges",
+         var1 != "nonanthro_cai_mn" & var2 != "nonanthro_cai_mn",
+         var1 != "nonanthro_tca" & var2 != "nonanthro_tca") %>%
+  left_join(covs_formatted, by = c("var1" = "Covariate")) %>%
+  mutate(var1 = PrettyName) %>%
+  select(-PrettyName) %>%
+  left_join(covs_formatted, by = c("var2" = "Covariate")) %>%
+  mutate(var2 = PrettyName) %>%
+  select(-PrettyName) %>%
+  drop_na() %>%
+  filter(abs(corr)>0.50)
+
+writexl::write_xlsx(xxx, "./tables/final_dataset_high_correlation.xlsx")
 ```
 
 
@@ -1049,10 +1121,20 @@ confint(top_model) %>%
     # add labels
     labs(x = '',
          y = 'Odds Ratio (standardized)') +
+  
+      annotate("text",
+           x = 0.5,        # Left edge of panel
+           y = 1.8,         # Top edge of panel
+           label = " ",
+           hjust = 0,                  # Left-aligned
+           vjust = 1,                  # Top-aligned
+           size = 5) +                    # Adjust size as needed
     
     # set theme
     theme_bw() + 
   
+    theme(plot.title = element_text(face = "bold")) +
+
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) #+   # Rotate x-axis labels by 45 degrees
   
     #add_phylopic(
@@ -1068,13 +1150,107 @@ ggsave(odds_fig_top, file = "./figures/top_model_neg_binomial_odds_ratios.png", 
 ```
 
 
+## 7.3. Odds ratio plots for the second-place model
+
+```{r}
+# Custom order for the x-axis covariates
+custom_order <- c(
+  "Broadleaf",
+  "Mixedwood",
+  "Coniferous",
+  "Fire <15",
+  "Inactive Well Sites",
+  "Seismic Lines",
+  "Pipelines & \nTransmission Lines"
+  )
+
+odds_fig_second <-
+
+# Exact same code as before, not annotating because I'm lazy. 
+confint(m_seis_wells) %>%
+  
+  as_tibble(rownames = "term") %>%
+  
+  set_names(c('term', 'lower', 'upper', 'estimate')) %>%
+  
+  mutate(across(c('lower', 'upper', 'estimate'), exp)) %>%
+  
+  filter(term %nin% c('(Intercept)', 'Std.Dev.(Intercept)|array',  'Std.Dev.(Intercept)|site:array')) %>%
+  
+  left_join(covs_formatted, by = c("term" = "Covariate")) %>%
+  
+  mutate(PrettyName = case_when(
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    term == "pipe_trans" ~ "Pipelines & \nTransmission Lines",
+    TRUE ~ PrettyName)) %>%
+  
+  mutate(PrettyName = factor(PrettyName, levels = custom_order)) %>%
+  
+  ggplot(., aes(x = PrettyName)) + 
+  
+    geom_hline(yintercept = 1, linetype='dashed', col = 'grey20') + 
+  
+    geom_errorbar(aes(x = PrettyName, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
+    
+    # add labels
+    labs(x = '',
+         y = '') +
+    
+    # plot as bars
+    geom_point(aes(y = estimate), size = 2.5) +
+  
+    scale_y_continuous(limits = c(0.4, 1.8)) + 
+  
+      # set theme
+    theme_bw() + 
+  
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +   # Rotate x-axis labels by 45 degrees
+  
+    annotate("text",
+           x = 0.5,        # Left edge of panel
+           y = 1.8,         # Top edge of panel
+           label = " ΔAICc=2.59",
+           hjust = 0,                  # Left-aligned
+           vjust = 1,                  # Top-aligned
+           size = 5)                    # Adjust size as needed
+ 
+
+  
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 6.6,
+    #  y = 1.6, 
+    #  height = 0.22
+    #  )
+
+odds_fig_second
+
+ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
+```
 
 
-# 8. Plot conditional effects for a covariate of interest
+## 7.4. Export the combined top and second-ranking model figures in one!
+
+```{r}
+ggpubr::ggarrange(odds_fig_top, odds_fig_second, 
+                  ncol = 2, 
+                  nrow = 1,
+                  align = "hv",
+                  labels = c("A", "B")  # Add plot labels
+                  )
+
+ggsave("./figures/odds_ratio_top_model_second_model.png", width = 7, height = 4.2, dpi = 700)
+```
+
+
+
+
+
+# 8. Plot conditional effects
 
 We will use our scaling summary here to backtransform the data into ecologically meaningful values. This is a bit hacky but it works. 
 
-### Decid:
+## 8.1. Decid:
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming....
@@ -1084,7 +1260,7 @@ backtransform <- data_scaled_summary %>%
          variable == "lc_broadleaf")
 
 # Use ggeffects to predict at all values of lc_broadleaf in the dataset
-ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
+f_decid <- ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
   
   as.data.frame() %>%
   
@@ -1096,32 +1272,32 @@ ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
     geom_line(size = 0.5) +  # Set lines to black
   
     # Confidence ribbon in front of the line
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'green3') +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'forestgreen') +
   
     # Show unscaled data points for just the buffer distances that we want. 
     geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = lc_broadleaf), color = "grey20", inherit.aes = FALSE) +
   
-    labs(x = "proportion broadleaf forest", 
-         y = "squirrel occurrence frequency") +
+    labs(x = "Broadleaf", 
+         y = NULL) +
       
     scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
   
     theme_bw() + 
   
-    theme(panel.grid = element_blank()) + 
+    theme(panel.grid = element_blank()) #+ 
       
     # Squirrel icon for fun
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 0.89,
-      y = 0.46, 
-      height = 0.11
-      )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 0.89,
+    #  y = 0.46, 
+    #  height = 0.11
+    #  )
 
-ggsave("./figures/top_model_neg_binomial_broadleaf.png", dpi=400, width = 6, height = 4)
+ggsave(f_decid, file = "./figures/top_model_neg_binomial_broadleaf.png", dpi=400, width = 6, height = 4)
 ```
 
-### Conifer:
+## 8.2. Conifer:
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming...
@@ -1131,7 +1307,7 @@ backtransform <- data_scaled_summary %>%
          variable == "lc_coniferous")
 
 # Use ggeffects to predict at all values of lc_coniferous in the dataset
-ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
+f_conifer <- ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
   
   as.data.frame() %>%
   
@@ -1144,7 +1320,7 @@ ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
     geom_line(size = 0.5) +  # Black line for model prediction
   
     # Add a confidence ribbon (plotted underneath the line)
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'darkolivegreen') +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'forestgreen') +
   
     # Add raw data rug for just the buffer distance of interest (in unscaled space)
     geom_rug(data = data %>% filter(buffer_dist == nat_buffer),
@@ -1152,8 +1328,8 @@ ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "proportion conifer forest", 
-         y = "squirrel occurrence frequency") +
+    labs(x = "Coniferous", 
+         y = NULL) +
       
     # Remove empty space on left side of x axis
     scale_x_continuous(expand = c(0, 0)) +
@@ -1161,20 +1337,21 @@ ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %>%
     # Minimal clean theme
     theme_bw() + 
   
-    theme(panel.grid = element_blank()) + 
+    theme(panel.grid = element_blank())# + 
       
     # Squirrel icon for fun (lower left corner this time)
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 0.08,
-      y = 0.4, 
-      height = 0.06
-    )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 0.08,
+    #  y = 0.4, 
+    #  height = 0.06
+    #)
 
 # Save the figure
-ggsave("./figures/top_model_neg_binomial_conifer.png", dpi = 400, width = 6, height = 4)
+ggsave(f_conifer, file = "./figures/top_model_neg_binomial_conifer.png", dpi = 400, width = 6, height = 4)
 ```
-### Now mixed forest:
+
+## 8.3. Mixedwood:
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming...
@@ -1184,7 +1361,7 @@ backtransform <- data_scaled_summary %>%
          variable == "lc_mixedwood")
 
 # Use ggeffects to predict model outcomes across all observed lc_mixedwood values (scaled units)
-ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) %>%
+f_mixedwood <- ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) %>%
   
   as.data.frame() %>%
   
@@ -1205,29 +1382,29 @@ ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "proportion mixedwood forest", 
-         y = "squirrel occurrence frequency") +
+    labs(x = "Mixedwood", 
+         y = NULL) +
       
     # Tighten up left side of the x-axis
     scale_x_continuous(expand = c(0, 0)) +
   
     # Clean and minimal styling
     theme_bw() + 
-    theme(panel.grid = element_blank()) + 
+    theme(panel.grid = element_blank()) #+ 
       
     # Icon again! Now in the upper-left corner for variety
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 0.06,
-      y = 1.4, 
-      height = 0.28
-    )
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 0.06,
+    #  y = 1.4, 
+    #  height = 0.28
+    #)
 
 # Save to file
-ggsave("./figures/top_model_neg_binomial_mixedwood.png", dpi = 400, width = 6, height = 4)
+ggsave(f_mixedwood, file = "./figures/top_model_neg_binomial_mixedwood.png", dpi = 400, width = 6, height = 4)
 ```
 
-### Recent fire:
+## 8.4. Recent fire
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming...
@@ -1237,7 +1414,7 @@ backtransform <- data_scaled_summary %>%
          variable == "fire_0_15")
 
 # Use ggeffects to predict at all observed values of fire_0_15 (in scaled units)
-ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
+f_fire <- ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
   
   as.data.frame() %>%
   
@@ -1250,7 +1427,7 @@ ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
     geom_line(size = 0.5) +  # Prediction line (black, thin)
   
     # Confidence interval ribbon in orange
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'orange3') +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'forestgreen') +
   
     # Add raw data rug for this buffer distance only (unscaled)
     geom_rug(data = data %>% filter(buffer_dist == nat_buffer),
@@ -1258,8 +1435,8 @@ ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "proportion recent fire (0–15 years)", 
-         y = "squirrel occurrence frequency") +
+    labs(x = "Fire (0–15 years)", 
+         y = NULL) +
       
     # No extra white space on x-axis
     scale_x_continuous(expand = c(0, 0)) +
@@ -1277,11 +1454,11 @@ ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
     # )
 
 # Save the plot
-ggsave("./figures/top_model_neg_binomial_fire.png", dpi = 400, width = 6, height = 4)
+ggsave(f_fire, file = "./figures/top_model_neg_binomial_fire.png", dpi = 400, width = 6, height = 4)
 
 ```
 
-### Cumulative site disturbance:
+## 8.5. Cumulative site disturbance:
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming...
@@ -1291,7 +1468,7 @@ backtransform <- data_scaled_summary %>%
          variable == "cfi_site")
 
 # Use ggeffects to predict across all observed values of cfi_site (scaled)
-ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
+f_cfi <- ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
   
   as.data.frame() %>%
   
@@ -1304,7 +1481,7 @@ ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
     geom_line(size = 0.5) +  # Black prediction line
   
     # Confidence ribbon (red tone for disturbance)
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'red4') +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'goldenrod3') +
   
     # Add raw data rug for this buffer distance only
     geom_rug(data = data %>% filter(buffer_dist == config_buffer),
@@ -1312,11 +1489,13 @@ ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "cumulative site disturbance", 
-         y = "squirrel occurrence frequency") +
+    labs(x = "Site disturbance", 
+         y = NULL) +
       
     # Remove padding on left of x-axis
-    scale_x_continuous(expand = c(0, 0)) +
+    scale_x_continuous(expand = c(0, 0), limits = c(0, 0.302)) +
+  
+    scale_y_continuous(limits = c(0, 1.8)) +
   
     # Minimalist, clean plot theme
     theme_bw() + 
@@ -1331,11 +1510,70 @@ ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
     # )
 
 # Save the plot
-ggsave("./figures/top_model_neg_binomial_cfi.png", dpi = 400, width = 6, height = 4)
+ggsave(f_cfi, file = "./figures/top_model_neg_binomial_cfi.png", dpi = 400, width = 6, height = 4)
 
 ```
 
-# 9. Plot conditional effects for a covariate of interest *with* an interaction
+
+## 8.6. Edge density:
+
+```{r}
+# Get just the row that contains the mean and SD for backtransforming...
+# This time for cumulative site disturbance (cfi_site), using the config buffer (might need to change to comp buffer later)
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == config_buffer,
+         variable == "nonanthro_ed")
+
+# Use ggeffects to predict across all observed values of cfi_site (scaled)
+f_edge <- ggeffects::ggpredict(top_model, terms = c("nonanthro_ed [all]")) %>%
+  
+  as.data.frame() %>%
+  
+  # Backtransform x-axis values to original scale
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  # Begin plot
+  ggplot(., aes(x = x, y = predicted)) +
+  
+    geom_line(size = 0.5) +  # Black prediction line
+  
+    # Confidence ribbon (red tone for disturbance)
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.48, fill = 'darkblue') +
+  
+    # Add raw data rug for this buffer distance only
+    geom_rug(data = data %>% filter(buffer_dist == config_buffer),
+             aes(x = nonanthro_ed),
+             color = "grey20", inherit.aes = FALSE) +
+  
+    # Axis labels
+    labs(x = "Edge density", 
+         y = NULL) +
+      
+    # Remove padding on left of x-axis
+    scale_x_continuous(expand = c(0, 0), limits = c(2, 202.85)) +
+    
+    scale_y_continuous(limits = c(0, 0.48)) +
+  
+    # Minimalist, clean plot theme
+    theme_bw() + 
+    theme(panel.grid = element_blank()) 
+  
+    # Optional squirrel icon (commented out for now)
+    # add_phylopic(
+    #   uuid = get_uuid(name = "Sciurus vulgaris"),
+    #   x = 0.04,
+    #   y = 5.6, 
+    #   height = 1.2
+    # )
+
+# Save the plot
+ggsave(f_edge, file = "./figures/top_model_neg_binomial_edge.png", dpi = 400, width = 6, height = 4)
+
+```
+
+
+
+## 8.6. Edge x CFI interaction
 
 ```{r}
 # Get just the row that contains the mean and SD for backtransforming...
@@ -1346,16 +1584,17 @@ backtransform <- data_scaled_summary %>%
 
 # Predict squirrel occurrence across full range of nonanthro_ed
 # for two quantiles (20th and 89th) of cumulative site disturbance (cfi_site)
-ggeffects::ggpredict(
+f_edge_cfi <- ggeffects::ggpredict(
+  
   top_model, 
   terms = c(
     "nonanthro_ed [all]",
     paste0("cfi_site [",
            quantile(data_final_scaled$cfi_site, 0.89), ", ",
            quantile(data_final_scaled$cfi_site, 0.20), "]")
-  )
-) %>%
-  
+    )
+  ) %>%
+    
   as.data.frame() %>%
   
   # Backtransform x values from scaled to original units (m/ha)
@@ -1381,7 +1620,7 @@ ggeffects::ggpredict(
       )
     ) +
     scale_fill_manual(
-      values = c('dodgerblue4', 'orange3'),  # Fill colors for clarity
+      values = c('darkblue', 'darkred'),  # Fill colors for clarity
       labels = c(
         paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.20), 3)),
         paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.89), 3))
@@ -1396,7 +1635,7 @@ ggeffects::ggpredict(
       labels = c("10% quantile", "90% quantile")
     ) +
     scale_fill_manual(
-      values = c('dodgerblue4', 'orange3'),  # Fill colors for clarity
+      values = c('dodgerblue2', 'darkred'),  # Fill colors for clarity
       labels = c("10% quantile", "90% quantile")
     ) +
   
@@ -1411,10 +1650,10 @@ ggeffects::ggpredict(
   
     # Axes and legend
     labs(
-      x = "anthropogenic edge density (m per Ha)", 
-      y = "expected count",
-      color = "cumulative \nsite \ndisturbance", 
-      fill = "cumulative \nsite \ndisturbance"
+      x = "Anthropogenic edge density (m per Ha)", 
+      y = "Expected count",
+      color = "Site \ndisturbance", 
+      fill = "Site \ndisturbance"
     ) +
   
     # Trim x and y axis range to what's observed and relevant
@@ -1424,20 +1663,26 @@ ggeffects::ggpredict(
     # Clean, minimal theme
     theme_bw() + 
     theme(panel.grid = element_blank()) +
-  
+    theme(
+      legend.position = "right",
+      legend.margin = margin(0, 0, 0, 0),
+      legend.box.margin = margin(0, 0, 0, -5),  # Pull legend closer to plot
+      plot.margin = margin(5, 5, 5, 5)           # Optional: adjust plot margins
+    ) +
+
     # Optional: add a squirrel icon again for flair :)
      add_phylopic(
        uuid = get_uuid(name = "Sciurus vulgaris"),
        x = 180,
        y = 0.95, 
-       height = 0.20
+       height = 0.23
      )
 
 # Save it!
-ggsave("./figures/top_model_edge_cfi_interaction.png", dpi = 400, width = 7, height = 4)
-
-
+ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction.png", dpi = 400, width = 7, height = 4)
 ```
+
+## 8.7. CFI x Edge interaction
 
 Do edges change the effect of site disturbance? This is a sort of backwards interpretation but I'm curious nonetheless. 
 
@@ -1449,16 +1694,17 @@ backtransform <- data_scaled_summary %>%
 
 # Predict squirrel occurrence across full range of cfi_site,
 # at two values of edge density (nonanthro_ed)
-ggeffects::ggpredict(
+f_cfi_edge <- ggeffects::ggpredict(
+  
   top_model, 
   terms = c(
     "cfi_site [all]",
     paste0("nonanthro_ed [",
            quantile(data_final_scaled$cfi_site, 0.89), ", ",
            quantile(data_final_scaled$cfi_site, 0.20), "]")
-  )
-) %>%
-  
+    )
+  ) %>%
+    
   as.data.frame() %>%
   
   # Backtransform x (cfi_site) from scaled units to proportion
@@ -1484,7 +1730,7 @@ ggeffects::ggpredict(
       )
     ) +
     scale_fill_manual(
-      values = c('dodgerblue4', 'orange3'), 
+      values = c('darkblue', 'goldenrod3'), 
       labels = c(
         paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.20), 1)),
         paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.80), 1))
@@ -1501,8 +1747,8 @@ ggeffects::ggpredict(
   
     # Axis labels and legend tweaks
     labs(
-      x = "cumulative site disturbance", 
-      y = "expected count",
+      x = "Cumulative site disturbance", 
+      y = "Expected count",
       color = "edge \ndensity \n(m/Ha)", 
       fill = "edge \ndensity \n(m/Ha)"
     ) +
@@ -1524,12 +1770,33 @@ ggeffects::ggpredict(
     # )
 
 # Save the figure
-ggsave("./figures/top_model_cfi_edge_interaction.png", dpi = 400, width = 7, height = 4)
+ggsave(f_cfi_edge, file = "./figures/top_model_cfi_edge_interaction.png", dpi = 400, width = 7, height = 4)
+```
+
+## 8.8. Combined plot:
+
+```{r}
+
+f_full_right <- cowplot::plot_grid(f_edge, f_cfi, ncol = 1, align = "v", axis = "lr")
+f_full_top <- plot_grid(f_edge_cfi, f_full_right, ncol = 2, rel_widths = c(3, 1))
+f_full_bottom <- plot_grid(f_fire, f_conifer, f_mixedwood, f_decid, nrow = 1, align = "v", axis = "lr")
+
+f_full <- plot_grid(f_full_top, f_full_bottom, ncol = 1, rel_heights = c(2, 1), align = "v", axis = "l")
+
+plot(f_full)
+
+ggsave(f_full, file = "./figures/top_model_all_effects.png", width = 9, height = 6, dpi = 500)
 
 
 ```
 
-# 10. Make a pretty AIC table for the report
+
+
+
+
+
+
+# 9. Make a pretty AIC table for the report
 
 ```{r}
 models_rank_table <- models_rank %>%
@@ -1591,7 +1858,9 @@ writexl::write_xlsx(models_rank_table, "./tables/OSM_model_selection_summary.xls
 
 ```
 
-# 11. Make a pretty model summary table
+# 10. Make a pretty model summary table
+
+## 10.1. for the top model
 
 ```{r}
 # Extract fixed effects from the top model, including confidence intervals
@@ -1645,10 +1914,7 @@ writexl::write_xlsx(top_model_summary, "./tables/OSM_top_model_summary.xlsx")
 
 ```
 
-
-# 12. Make stats for the *second place* model
-
-## 12.1. Model summary table
+## 10.2. For the second place model
 
 ```{r}
 # Exact same code as before so not gonna re-type the annotations... you get the deal. 
@@ -1690,97 +1956,6 @@ top_model_summary <- bind_rows(
 
 writexl::write_xlsx(top_model_summary, "./tables/OSM_second_place_model_summary.xlsx")
 ```
-
-## 12.2. Odds ratio plots for the conditional model
-
-```{r}
-# Custom order for the x-axis covariates
-custom_order <- c(
-  "Broadleaf",
-  "Mixedwood",
-  "Coniferous",
-  "Fire <15",
-  "Inactive Well Sites",
-  "Seismic Lines",
-  "Pipelines & \nTransmission Lines"
-  )
-
-odds_fig_second <-
-
-# Exact same code as before, not annotating because I'm lazy. 
-confint(m_seis_wells) %>%
-  
-  as_tibble(rownames = "term") %>%
-  
-  set_names(c('term', 'lower', 'upper', 'estimate')) %>%
-  
-  mutate(across(c('lower', 'upper', 'estimate'), exp)) %>%
-  
-  filter(term %nin% c('(Intercept)', 'Std.Dev.(Intercept)|array',  'Std.Dev.(Intercept)|site:array')) %>%
-  
-  left_join(covs_formatted, by = c("term" = "Covariate")) %>%
-  
-  mutate(PrettyName = case_when(
-    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
-    term == "pipe_trans" ~ "Pipelines & \nTransmission Lines",
-    TRUE ~ PrettyName)) %>%
-  
-  mutate(PrettyName = factor(PrettyName, levels = custom_order)) %>%
-  
-  ggplot(., aes(x = PrettyName)) + 
-  
-    geom_hline(yintercept = 1, linetype='dashed', col = 'grey20') + 
-  
-    geom_errorbar(aes(x = PrettyName, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
-    
-    # add labels
-    labs(x = '',
-         y = '') +
-    
-    # plot as bars
-    geom_point(aes(y = estimate), size = 2.5) +
-  
-    scale_y_continuous(limits = c(0.4, 1.8)) + 
-  
-      # set theme
-    theme_bw() + 
-  
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) #+   # Rotate x-axis labels by 45 degrees
-  
-    #add_phylopic(
-    #  uuid = get_uuid(name = "Sciurus vulgaris"),
-    #  x = 6.6,
-    #  y = 1.6, 
-    #  height = 0.22
-    #  )
-
-odds_fig_second
-
-ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
-```
-
-
-Export the combined top and second-ranking moel figures in one!
-
-
-```{r}
-ggpubr::ggarrange(odds_fig_top, odds_fig_second, 
-                  ncol = 2, 
-                  nrow = 1,
-                  align = "h",
-                  labels = c("A", "B")  # Add plot labels
-                  )
-
-ggsave("./figures/odds_ratio_top_model_second_model.png", width = 7, height = 4.4, dpi = 500)
-
-cowplot::plot_grid(odds_fig_top, odds_fig_second, 
-                  ncol = 2,
-                  axis = 'l',
-                  align = 'h')
-```
-
-
-
 
 
 
