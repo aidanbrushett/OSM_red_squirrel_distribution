@@ -2,16 +2,26 @@
 title: "Extract landcover covariates"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
-output: 
+output:
   html_document:
     theme: default
+    highlight: tango
     toc: yes
     toc_float: yes
+  pdf_document:
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",      # Set Arial for main text
+      ]
 ---
 
 # Before you begin
 
-This script is number 1 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+This script is number 1 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
 
 This script was used to extract the landscape metrics for all sites in the study from a variety of rasters, geodatabases, and shapefiles of landcover data. **The raw spatial data used to develop landcover metrics is not available on GitHub but can be shared by the authors upon request.**
 
@@ -34,7 +44,7 @@ School of Environmental Studies
 
 # 0. Setup
 
-Don't want to run anything in knitting because it would take a bazillion hours
+Don't want to run anything in knitting because it would take a bazillion hours. Everything set to `eval = FALSE` for now. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, 

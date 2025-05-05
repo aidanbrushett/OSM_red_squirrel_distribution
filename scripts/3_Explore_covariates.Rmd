@@ -1,10 +1,20 @@
 ---
-title: "Explore covariates"
+title: "Explore landscape covariates"
 author: "Aidan Brushett"
 date: "`r Sys.Date()`"
 output: 
+  pdf_document:
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",      # Set Arial for main text
+      ]
   html_document:
     theme: default
+    highlight: tango
     toc: yes
     toc_float: yes
 ---
@@ -15,7 +25,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Before you begin
 
-This script is number 3 of 5 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+This script is number 3 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
 
 This script was used to conduct the exploratory analysis for all potential landscape covariates in our dataset prior to modelling. **The raw spatial data used to develop landcover metrics is not available on GitHub but can be shared by the authors upon request.**
 
@@ -81,17 +91,16 @@ covs_to_explore <- covs %>%
     -landscape_cohesion,
     -landscape_ed, 
     -landscape_cai_mn,
-    -landscape_tca
-         ) %>%
+    -landscape_tca) %>%
   
   relocate((1:8), sort(names(.)))
 ```
 
 # 2. Data distribution
 
-Histograms at 500 meters:
+## 2.1. Histograms at 500 meters:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 covs_to_explore %>%
   
   filter(buffer_dist == 500) %>%
@@ -106,9 +115,9 @@ covs_to_explore %>%
          theme_classic())
 ```
 
-Box and whiskers at 500 meters:
+## 2.2. Box and whiskers at 500 meters:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 covs_to_explore %>%
   
   filter(buffer_dist == 500) %>%
@@ -122,9 +131,9 @@ covs_to_explore %>%
          theme_classic())
 ```
 
-Histograms at 3500 meters:
+## 2.3. Histograms at 3500 meters:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 covs_to_explore %>%
   
   filter(buffer_dist == 3500) %>%
@@ -138,9 +147,9 @@ covs_to_explore %>%
          theme_classic())
 ```
 
-Box and whiskers at 3500 meters:
+## 2.4. Box and whiskers at 3500 meters:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 covs_to_explore %>%
   
   filter(buffer_dist == 3500) %>%
@@ -156,7 +165,7 @@ covs_to_explore %>%
 
 # 3. Correlation
 
-Now let's look at correlation among variables. We have a ton of variables to look at so for now we'll export to excel.
+Now let's look at correlation among variables. We have a ton of variables to look at so for now we'll export to Excel.
 
 ```{r message=FALSE, warning=FALSE}
 # Histograms for each buffer size
