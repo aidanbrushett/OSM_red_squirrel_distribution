@@ -139,20 +139,80 @@ and formatted using the scripts within the repository.
 
 *Files in figures folder*
 
+This folder contains various plots generated in the scripts of this
+repository for the purposes of data visualization.
+
+-   **allarrays_monthly_detections.png;** plot depicting the number of
+    detections per month, grouped by landscape unit; generated in the
+    4_Create_response variable.rmd script
+
+-   **odds_ratio_top_model_second_model.png;** plot depiciting the
+    standardized odds ratios for each variable in top models; generated
+    in the 5_Fit_negative_binomial_models_best_scale.rmd script
+
+-   **redsquirrel_neg_binomial_submodel_scale_modelweight.png;** plot
+    depicting the AICc weight of top models for each covariate subset
+    across all buffer sizes; generated in the
+    5_Fit_negative_binomial_models_best_scale.rmd script
+
+-   **top_model_all_effects.png;** plot depicting the conditional
+    effects of each variable in the top model; generated in the
+    5_Fit_negative_binomial_models_best_scale.rmd script
+
+-   **top_model_diagnostics.png;** plot depicting diagnostic plots for
+    checking model assumptions; generated in the
+    5_Fit_negative_binomial_models_best_scale.rmd script
+
+-   **top_model_simulations_coefficient_density_gaussian_sampler.png;**
+    plot depicting the results of the simulations using the Gaussain
+    distribution (normal) sampler; generated in the
+    6_run_simulations.rmd script
+
+-   **top_model_simulations_coefficient_density_reduced_sample_size.png;**
+    plot depicting the results of the simulations using the uniform
+    distribution sampler and a reduced sample size; generated in the
+    6_run_simulations.rmd script
+
+-   **top_model_simulations_coefficient_density_uniform_sampler.png;**
+    plot depicting the results of the simulations using the uniform
+    distribution sampler; generated in the 6_run_simulations.rmd script\
+
 *Files in scripts folder*
 
--   **1_Extract_landcover.html**;
--   **1_Extract_landcover.Rmd;**
--   **2_Format_covariates.html**
--   **2_Format_covariates.Rmd**
--   **3_Explore_covariates.html**
--   **3_Explore_covariates.Rmd**
--   **4_Create_response_variables.html**
--   **4_Create_response_variables.Rmd**
--   **5_Fit_negative_binomial_models_best_scale.html**
--   **5_Fit_negative_binomial_models_best_scale.Rmd**
--   **6_run_simulations.html**
--   **6_run_simulations.Rmd**
+-   **1_Extract_landcover.html**; script to extract the landscape
+    metrics for all sites in the study area.
+-   **1_Extract_landcover.Rmd;** script to extract the landscape metrics
+    for all sites in the study area.
+-   **2_Format_covariates.html;** script to append, combine, and rename
+    the landscape metrics for all sites in the study area that were
+    extracted in the previous script.
+-   **2_Format_covariates.Rmd;** script to append, combine, and rename
+    the landscape metrics for all sites in the study area that were
+    extracted in the previous script.
+-   **3_Explore_covariates.html;** script to conduct exploratory
+    analysis of all potential landscape covariates in the dataset prior
+    to modelling.
+-   **3_Explore_covariates.Rmd;** script to conduct exploratory analysis
+    of all potential landscape covariates in the dataset prior to
+    modelling.
+-   **4_Create_response_variables.html;** script to create and explore
+    potential response variables describing the spatial distribution of
+    red squirrels in out study area.
+-   **4_Create_response_variables.Rmd;** script to create and explore
+    potential response variables describing the spatial distribution of
+    red squirrels in the study area.
+-   **5_Fit_negative_binomial_models_best_scale.html;** script to fit,
+    evaluate, and visualize all models of landscape structure and its
+    influence on the spatial distribution of red squirrels in the study
+    area.
+-   **5_Fit_negative_binomial_models_best_scale.Rmd;** script to fit,
+    evaluate, and visualize all models of landscape structure and its
+    influence on the spatial distribution of red squirrels in the study
+    area.
+-   **6_run_simulations.html;** script to fit models to simulated data
+    and evaluate the predictive accuracy of the red squirrel models.
+-   **6_run_simulations.Rmd;** script to fit models to simulated data
+    and evaluate the predictive accuracy of the red squirrel models.
 
 ### METHODOLOGICAL INFORMATION
 
@@ -176,6 +236,8 @@ data:** We used program R version 4.4.1 with package lme4.
 
 **People involved with sample collection, processing, analysis and/or
 submission:**
+
+?
 
 ## PROCESSED DATA
 
@@ -219,62 +281,165 @@ submission:**
 
 **Variable List:**
 
--   **array**
--   **site**
--   **array_year**
--   **lat**
--   **long**
--   **easting_12N**
--   **northing_12N**
--   **buffer_dist**
--   **cfi_site**
--   **cfi_site_with_harvest**
--   **cfi_site_with_vegedge**
--   **harvest_0_15**
--   **harvest_gt_15**
--   **harvest_total**
--   **osm_industrial**
--   **pipe_trans**
--   **railways**
--   **roads**
--   **seismic**
--   **seismic_lines**
--   **seismic_lines_3D**
--   **trails**
--   **veg_edges**
--   **wells_active**
--   **well_inactive**
--   **wells_total**
--   **pct_betu_pap**
--   **fire_0_15**
--   **fire_gt_15**
--   **pct_lari_lar**
--   **lc_broadleaf**
--   **lc_conifer**
--   **lc_herbs**
--   **lc_mixedwood**
--   **lc_shrubs**
--   **lc_water**
--   **lc_wetland**
--   **lc_wetland_treed**
--   **pct_pice_gla**
--   **pct_pice_mar**
--   **pct_pinu_ban**
--   **pct_popu_tre**
--   **nonanthro_cai_nm**
--   **nonanthro_ed**
--   **nonanthro_tca**
--   **nonanthro_cai_nm**
--   **landscape_cai_mn**
--   **landscape_ed**
--   **landscape_tca**
--   **nonanthro_cohesion**
--   **landscape_cohesion**
--   **landscape_contag**
--   **landscape_mesh**
--   **landscape_np**
--   **landscape_shei**
--   **landscape_siei**
+-   **array;** a factor with 10 levels describing the landscape unit
+    (eg., LU01)
+-   **site;** a factor with 430 levels where the first element
+    abbreviation describes the landscape unit and the second element
+    describes the camera site.
+-   **array_year;** a factor with 3 levels that describes the year the
+    camera was deployed
+-   **lat;** latitude of the camera location
+-   **long;** longitude of the camera location
+-   **easting_12N;** easting coordiate of the camera site(NAD 83 UTM
+    Zone 12N)
+-   **northing_12N;** northing coordiate of the camera site(NAD 83 UTM
+    Zone 12N)
+-   **buffer_dist;** a numeric measurement in meters ranging from 50 -
+    5000, of the buffer radius around the camera for which the
+    proportion of all variables were calculated.
+-   **harvest_0_15;** a numeric variable indicating the proportion of
+    harvest areas harvested within the past 15 years within the buffer
+    area.
+-   **harvest_gt_15;** a numeric variable indicating the proportion of
+    harvest areas harvested over 15 years ago within the buffer area.
+-   **harvest_total;** a numeric variable indicating the proportion of
+    all harvest areas within the buffer area.
+-   **osm_industrial;** a numeric measurement representing the
+    proportion of various industrial features and clearings within the
+    buffer. This includes, borrowpits (i.e., Borrowpit-dry,
+    Borrowpit-wet, Borrowpits, Ris-borrowpits, Dugout, Lagoon, and
+    Sump), clearings (i.e., Clearing-unknown,
+    Clearing-wellpad-unconfirmed, Ris-clearing, Ris-clearing-unknown,
+    and Runway), facilities (i.e., Camp-industrial, Facility-other,
+    Facility-unknown, Mill, Misc-oil-gas-facility, Oil-gas-plant,
+    Ris-camp-industrial, Ris-facility-operations, Ris-facility-unknown,
+    Ris-plant, Ris-tank-farm, Ris-utilities, and Urban-industrial), and
+    mines (i.e., Grvl-sand-pit, Mines-oilsands, Mines-pitlake,
+    Open-pit-mine, Peat, Ris-drainage, Ris-mines-oilsands,
+    Ris-oilsands-rms, Ris-overburden-dump, Ris-reclaim-ready,
+    Ris-soil-salvaged, Ris-tailing-pond, Ris-waste, and Tailing-pond).
+-   **pipe_trans;** a numeric measurement representing the proportion of
+    pipelines and transmission lines within the buffer.
+-   **railways;** a numeric variable indicating the proportion of single
+    track railways within the buffer area. Single track railways are
+    defined as, hard, steel rail lines designed for train use.
+    Specifically, a road or track for trains, consisting of parallel
+    steel rails, supported on wooden crossbeams. The single track
+    consists of one parallel sets of tracks.
+-   **roads**; a numeric measurement representing the proportion of
+    roads within the buffer. Roads are defined as, non-vegetated,
+    impermeable surfaces used for motorized vehicle or aircraft
+    transportation or access and includes, Airp-runway,
+    Interchange-ramp, Ris-airp-runway, Ris-road, Road-gravel-1L,
+    Road-gravel-2L, Road-paved-1L, Road-paved-2L, Road-paved-3L,
+    Road-paved-4L, Road-paved-5L, Road-paved-6L, Road-paved-7L,
+    Road-paved-div, Road-paved-undiv-1L, Road-paved-undiv-2L,
+    Road-unclassified, Road-unimproved, Road-unpaved-1L,
+    Road-unpaved-2L, Road-winter, and Transfer station.
+-   **seismic;** a numeric measurement representing the proportion of
+    seismic lines and 3D seismic lines within the buffer.
+-   **seismic_lines;** a numeric measurement representing the proportion
+    of seismic lines within the buffer. Seismic lines are defined as,
+    cleared corridors created during hydrocarbon exploration with a
+    3-meter buffer (6-meter total width), and were not grouped with any
+    other variables.
+-   **seismic_lines_3D;** a numeric measurement representing the
+    proportion of 3D seismic lines (also called low-impact seismic
+    lines) within the buffer. 3D seismic lines are defined as, cleared
+    corridors created during hydrocarbon exploration with a 1.5-meter
+    buffer (3-meter total width), and were not grouped with any other
+    variables.
+-   **trails;** a numeric measurement representing the proportion of
+    trails within the buffer. Trails are defined as, cleared corridors
+    surfaced with dirt or low vegetation for human/vehicle access, and
+    include Trail, and Truck-trail.
+-   **veg_edges;** a numeric measurement representing the proportion of
+    vegetated edges within the buffer. Vegetated edges are defined as,
+    disturbed vegetation alongside road edges, railway edges including
+    ditches, and other industrial features, and include
+    Vegetated-edge-railways, Vegetated-edge-roads, and Surrounding-veg.
+-   **wells_active;** a numeric measurement representing the proportion
+    of active wells within the buffer. Active wells are defined as,
+    ground cleared for an oil/gas well pad where at least one well is
+    currently active include, Well-bitumen, Well-cased,
+    Well-cleared-not-confirmed, Well-cleared-not-drilled, Well-gas,
+    Well-oil, Well-other, and Well-unknown.
+-   **well_inactive;** a numeric measurement representing the proportion
+    of inactive wells within the buffer. Inactive ells are defined as,
+    ground cleared for an oil/gas well pad, where the well is currently
+    abandoned.
+-   **wells_total;** a numeric measurement representing the proportion
+    of wells within the buffer. Wells are defined as, ground cleared for
+    an oil/gas well pad, and include Well-abandoned, Well-bitumen,
+    Well-cased, Well-cleared-not-confirmed, Well-cleared-not-drilled,
+    Well-gas, Well-oil, Well-other, and Well-unknown.
+-   **pct_betu_pap;** a numeric variable indicating the proportion of
+    Betula papyrifera (White birch) within the buffer area.
+-   **fire_0_15;** a numeric variable indicating the proportion of
+    burned area up to 15 years old within the buffer area.
+-   **fire_gt_15;** a numeric variable indicating the proportion of
+    burned area over 15 years ago within the buffer area.
+-   **pct_lari_lar;** a numeric variable indicating the proportion of
+    Larix laricina (Tamarack) within the buffer area.
+-   **lc_broadleaf;** a numeric variable indicating the proportion of
+    broadleaf forest within the buffer area.
+-   **lc_conifer;** a numeric variable indicating the proportion of
+    conifer forest within the buffer area.
+-   l**c_herbs;** a numeric variable indicating the proportion of herb
+    within the buffer area.
+-   **lc_mixedwood;** a numeric variable indicating the proportion of
+    mixedwood forest within the buffer area.
+-   **lc_shrubs;** a numeric variable indicating the proportion of
+    shrubs within the buffer area.
+-   **lc_water;** a numeric variable indicating the proportion of water
+    within the buffer area.
+-   **lc_wetland;** a numeric variable indicating the proportion of
+    wetland within the buffer area.
+-   **lc_wetland_treed;** a numeric variable indicating the proportion
+    of treed wetland within the buffer area.
+-   **pct_pice_gla;** a numeric variable indicating the proportion of
+    Larix laricina (White spruce) within the buffer area.
+-   **pct_pice_mar;** a numeric variable indicating the proportion of
+    Picea mariana (Black spruce) within the buffer area.
+-   **pct_pinu_ban;** a numeric variable indicating the proportion of
+    Pinus banksaina (Jack pine) within the buffer area.
+-   **pct_popu_tre;** a numeric variable indicating the proportion of
+    Populus tremuloides (Trembling aspen) within the buffer area.
+-   **nonanthro_cai_mn;** a numeric variable indicating the mean of the
+    core area index of natural habitat, representing disturbance relief
+    within the buffer area.
+-   **nonanthro_ed;** a numeric variable indicating the edge density of
+    natural habtiat, representing the edges created by human features
+    within the buffer area.
+-   **nonanthro_tca;** a numeric variable indicating the total core area
+    of natural habitat, representing the amount of natural habitat that
+    is \> 50 meters from the edge within the buffer area.
+-   **landscape_cai_mn;** a numeric variable indicating the mean of the
+    core area index of all patches within the buffer area.
+-   **landscape_ed;** a numeric variable indicating the edge density
+    within the buffer area.
+-   **landscape_tca;** a numeric variable indicating the total core
+    area, representing the amount of the patch that is \> 50 meters from
+    the edge within the buffer area.
+-   **nonanthro_cohesion;** a numeric variable indicating natural
+    habitat cohesion, representing the chances that two points of a
+    class are connected within the buffer area.
+-   **landscape_cohesion;** a numeric variable indicating the patch
+    cohesion index representing the chances that two points are
+    connected within the buffer area.
+-   **landscape_contag;** a numeric variable indicating the contagion,
+    representing the probabiltiy of two random cells belonging to the
+    same class within the buffer area.
+-   **landscape_mesh;** a numeric variable indicating the probability of
+    two pixels on the landscape being in the same patch within the
+    buffer area.
+-   **landscape_np;** a numeric variable indicating the total number of
+    patches, representing a measure of patch size within the buffer
+    area.
+-   **landscape_shei;** a numeric variable indicating the Shannon
+    eveness index within the buffer area.
+-   **landscape_siei;** a numeric variable indicating the Simpson
+    eveness index within the buffer area.
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_monthly_detections_2021_2022_2023.csv]
 
@@ -302,19 +467,9 @@ submission:**
 
 -   **Number of variables:** 8
 -   **Number of cases/rows:** 9461
-
-**Variable List:**
-
--   **buffer;**
--   **site;** a factor with 430 levels where the first element
-    abbreviation describes the landscape unit and the second element
-    describes the camera site.
--   **landscape_cohesion**
--   **landscape_contag**
--   **landscape_mesh**
--   **landscape_np**
--   **landscape_shei**
--   **landscape_siei**
+-   **NOTE:** An intermediate file wherein all variables used in final
+    analysis are decribed under
+    "processed/OSM_all_covariates_HFI_SBFI_final.csv"
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_HFI2021_metrics.csv]
 
@@ -323,7 +478,9 @@ submission:**
 
 **Variable List:**
 
--   **buffer;**
+-   **buffer;** a numeric measurement in meters ranging from 50 - 5000,
+    of the buffer radius around the camera for which the proportion of
+    associated human factors variables were calculated.
 -   **site;** a factor with 430 levels where the first element
     abbreviation describes the landscape unit and the second element
     describes the camera site.
@@ -436,8 +593,15 @@ submission:**
     activities. Specifically, identifies areas where the reclamation
     liability associated for the disturbance is currently held by
     another industry operator.
--   **GREENSPACE**
--   **HARVEST-AREA-1940**
+-   **GREENSPACE;** a numeric variable indicating the proportion of
+    greenspace within the buffer area. Green space is defined as,
+    greenspace used for recreation within a residential area including
+    parks, schools, school yards and sports fields.
+-   **HARVEST-AREA-1940;** a numeric variable indicating the proportion
+    of harvest area from 1990 in the buffer area. Harvest area is
+    defined as, areas in Alberta's forested Green Zone where forestry
+    operations have occured (clear-cut, selective harvest, salvage
+    logging, etc.).
 -   **HARVEST-AREA-1950**
 -   **HARVEST-AREA-1960**
 -   **HARVEST-AREA-1963**
@@ -489,7 +653,13 @@ submission:**
 -   **HARVEST-AREA-2019**
 -   **HARVEST-AREA-2020**
 -   **HARVEST-AREA-2021**
--   **HARVEST-AREA-WHITE-ZONE**
+-   **HARVEST-AREA-WHITE-ZONE;** a numeric variable indicating the
+    proportion of harvest area white zone within the buffer. Harvest
+    area white zone is defined as, areas where forestry operations have
+    occurred (clear-cut, selective harvest, salvage logging, etc.).
+    specifically, areas in Alberta’s unforested White Zone where woody
+    vegetation (i.e. shrub, trees, etc..) have been removed and the
+    purpose of the clearing has not yet been determined.
 -   **LAGOON;** a numeric variable indicating the proportion of lagoons
     within the buffer area. Lagoons are defined as, an artificial
     holding or treatment ponds for agricultural or municipal wastewater.
@@ -499,7 +669,10 @@ submission:**
     seismic lines are defined as, a polygon feature class derived from a
     1.5-meter buffer (3 meter total width) of a pre-low-impact-seismic
     centerline.
--   **MINES-OILSANDS**
+-   **MINES-OILSANDS;** a numeric variable indicating the proportion of
+    oil sands mines within the buffer area. Oil sands mines are defined
+    as, heavy industry use with bare and/or vegetated ground and low
+    human density for the purpose of oil sands mining.
 -   **MISC-OIL-GAS-FACILITY;** a numeric variable indicating the
     proportion of misc. oil/gas facilities within the buffer area. Misc.
     oil/gas facilities are defined as, human footprint features related
@@ -531,7 +704,9 @@ submission:**
     of residence clearing within the buffer area. Residence clearing is
     defined as, areas cleared for building developments that do not yet
     have any buildings.
--   **RIS-CAMP-INDUSTRIAL**
+-   **RIS-CAMP-INDUSTRIAL;** a numeric variable indicating the
+    proportion of areas disturbed for the purposed of housing camp
+    workers within the buffer area.
 -   **RIS-CLEARING-UNKNOWN**
 -   **RIS-DRAINAGE**
 -   **RIS-FACILITY-OPERATIONS**
@@ -548,38 +723,168 @@ submission:**
 -   **RIS-TRANSMISSION-LINE**
 -   **RIS-UTILITIES**
 -   **RIS-WINDROW**
--   **RLWY-SGL-TRACK**
--   **ROAD-GRAVEL-1L**
--   **ROAD-GRAVEL-2L**
--   **ROAD-PAVED-DIV**
--   **ROAD-PAVED-UNDIV-1L**
--   **ROAD-PAVED-UNDIV-2L**
--   **ROAD-UNCLASSIFIED**
--   **ROAD-UNIMPROVED**
--   **ROAD-WINTER**
--   **ROUGH_PASTURE**
--   **RUNWAY**
--   **RURAL-RESIDENCE**
--   **SUMP**
--   **SURROUNDING-VEG**
--   **TAILING-POND**
--   **TAME_PASTURE**
--   **TRAIL**
--   **TRANSMISSION-LINE**
--   **TRUCK-TRAIL**
--   **URBAN-INDUSTRIAL**
--   **URBAN-RESIDENCE**
--   **VEGETATED-EDGE-RAILWAYS**
--   **VEGETATED-EDGE-ROADS**
--   **WELL-ABAND**
--   **WELL-BITUMEN**
--   **WELL-CASED**
--   **WELL-GAS**
--   **WELL-OIL**
--   **WELL-OTHER**
--   **WELL-UNKNOWN**
--   **WELL_CLEARED_NOT_CONFIRMED**
--   **WELL_CLEARED_NOT_DRILLED**
+-   **RLWY-SGL-TRACK;** a numeric variable indicating the proportion of
+    single track railways within the buffer area. Single track railways
+    are defined as, hard, steel rail lines designed for train use.
+    Specifically, a road or track for trains, consisting of parallel
+    steel rails, supported on wooden crossbeams. The single track
+    consists of one parallel sets of tracks.
+-   **ROAD-GRAVEL-1L;** a numeric variable indicating the proportion of
+    1L gravel roads within the buffer area. 1L gravel roads are defined
+    as, a roadway surfaced with gravel constituting a main access route.
+    The road surface is about 6 meters in width, and the road clearing
+    is about 20 meters or greater in width. The surface, ditches,
+    bridges and intersections are in good condition.
+-   **ROAD-GRAVEL-2L;** a numeric variable indicating the proportion of
+    2L gravel roads within the buffer area. 2L gravel roads are defined
+    as, a roadway surfaced with gravel constituting as a main access
+    route. The road surface is 7 meters or greater in width, and the
+    road clearing is 30 meters or greater in width. The surface,
+    ditches, bridges and intersections are in good condition.
+-   **ROAD-PAVED-DIV;** a numeric variable indicating the proportion of
+    PAVED-DIV roads within the buffer area. PAVED-DIV roads are defined
+    as, a major roadway, which is paved with asphalt or concrete, and
+    consists of two (2) roadbeds separated by a median. Each road bed
+    usually consists of two (2) or more lanes.
+-   **ROAD-PAVED-UNDIV-1L;** a numeric variable indicating the
+    proportion of UNDIV 1L paved roads within the buffer area. UNDIV 1L
+    paved roads are defined as, non-vegetated, impermeable surfaces used
+    for motorized vehicle or aircraft transportation or access.
+    Specifically, a roadway, paved with asphalt or concrete, consisting
+    of one (1) lane, and usually found servicing rural acreages that are
+    close to large urban centers.
+-   **ROAD-PAVED-UNDIV-2L;** a numeric variable indicating the
+    proportion of 2L paved roads within the buffer area. 2L paved roads
+    are defined as, non-vegetated, impermeable surfaces used for
+    motorized vehicle or aircraft transportation or access.
+    Specifically, a major roadway, which is paved with asphalt or
+    concrete, and consists of two (2) roadbeds separated by a median.
+    Each road bed usually consists of two (2) or more lanes.
+-   **ROAD-UNCLASSIFIED;** a numeric variable indicating the proportion
+    of unclassified roads within the buffer area. Unclassified roads are
+    defined as, non-vegetated, impermeable surfaces used for motorized
+    vehicle or aircraft transportation or access. Specifically, a
+    temporary coding for an unknown class of road, which will be updated
+    after a field check or verification.
+-   **ROAD-UNIMPROVED;** a numeric variable indicating the proportion of
+    unimproved roads within the buffer area. Unimproved roads are
+    defined as, a roadway surfaced with dirt, which is constituted as a
+    minor access route. The road surface is up to 7 meters in width, and
+    the road clearing is up to 20 meters in width. The surface and
+    ditches are poorly maintained, and the bridges are narrow.
+-   **ROAD-WINTER;** a numeric variable indicating the proportion of
+    winter roads within the buffer area. Winter roads are defined as,
+    non-vegetated, impermeable surfaces used for motorized vehicle or
+    aircraft transportation or access. Specifically, a clearing that is
+    vehicular accessible in winter only.
+-   **ROUGH_PASTURE;** a numeric variable indicating the proportion of
+    rough pasture within the buffer area. Rough pasture is defined as,
+    lands where the forest and/or shrubs have been removed so that
+    native or introduced grasses can flourish for the grazing of
+    livestock. Specifically, this pastureland has not been irrigated or
+    fertilized and the soil has not been disturbed to improve
+    productivity.
+-   **RUNWAY;** numeric variable indicating the proportion of
+    unclassified runways within the buffer area. Runways are defined as,
+    human footprint related to vegetated facilities and recreation,
+    specifically a vegetated runway.
+-   **RURAL-RESIDENCE;** a numeric variable indicating the proportion of
+    rural residence within the buffer area. Rural residence is defined
+    as, country-residential developments with density of 10 - 100
+    buildings per quarter section.
+-   **SUMP;** a numeric variable indicating the proportion of sumps
+    within the buffer area. Sumps are defined as, An artificial holding
+    or treatment pond for industrial wastewater. Drilling waste storage
+    system – holding of drilling waste on well sites or remotely. Either
+    earthen excavation (in clayey soils) or sumps lined with a synthetic
+    liner.
+-   **SURROUNDING-VEG;** a numeric variable indicating the proportion of
+    surrounding vegetation within the buffer area. Surrounding
+    vegetation is defined as, human footprint related to vegetated
+    facilities and recreation. Specifically, disturbed vegetation
+    surrounding airport runways, highway ramps and other industrial
+    features.
+-   **TAILING-POND;** a numeric variable indicating the proportion of
+    tailing pond within the buffer area. Tailing pond is defined as,
+    body of water on/in close proximity to an oil sands mine comprising
+    acids, benzene, hydrocarbons, residual bitumen, fine silts, and
+    water.
+-   **TAME_PASTURE;** a numeric variable indicating the proportion of
+    tame pasture within the buffer area. Tame pasture is defined as,
+    lands where the soil has been disturbed and planted to perennial
+    grass species used primarily for grazing livestock. Specifically,
+    tame pasture represents areas of grasses, legumes or grass-legume
+    mixtures planted for livestock grazing or hay collection.
+-   **TRAIL;** a numeric variable indicating the proportion of trails
+    within the buffer. Trails are defined as, a polygon feature class
+    derived from a 2-meter buffer (4 meter total width) of a
+    pre-low-impact-seismic centerline.
+-   **TRANSMISSION-LINE;** a numeric variable indicating the proportion
+    of transmission lines within the buffer area. Transmission lines are
+    defined as, cleared corridors designated for the location of power
+    transmission line infrastructure.
+-   **TRUCK-TRAIL;** a numeric variable indicating the proportion of
+    truck trails within the buffer area. Truck trails are defined as, a
+    roadway surfaced with dirt or low vegetation constituting a minor
+    access route.
+-   **URBAN-INDUSTRIAL;** a numeric variable indicating the proportion
+    of urban-industrial area within the buffer area. Urban-industrial
+    area is defined as, human footprint features related to various
+    industrial activities. Specifically, an industrial facility within
+    the boundary of an urban residence.
+-   **URBAN-RESIDENCE;** a numeric variable indicating the proportion of
+    urban residence within the buffer area. Urban residence is defined
+    as, residential areas in cities, towns, villages, hamlets and ribbon
+    developments. Areas that are dominated by dwellings.
+-   **VEGETATED-EDGE-RAILWAYS;** a numeric variable indicating the
+    proportion of vegetated edge railways within the buffer area.
+    Vegetated edge railways are defined as, disturbed vegetation
+    alongside road edges and railway edges including ditches.
+-   **VEGETATED-EDGE-ROADS;** a numeric variable indicating the
+    proportion of vegetated edge roads within the buffer area. Vegetated
+    edge roads are defined as, disturbed vegetation alongside road edges
+    and railway edges including ditches.
+-   **WELL-ABAND;** a numeric variable indicating the proportion of
+    abandoned wells within the buffer. Abandoned wells are defined as,
+    ground cleared for an oil/gas well pad where the well is currently
+    abandoned.
+-   **WELL-BITUMEN;** a numeric variable indicating the proportion of
+    bitumen wells within the buffer area. Bitumen wells are defined as,
+    ground cleared for an oil/gas well pad where at least one well is
+    currently active.
+-   **WELL-CASED;** a numeric variable indicating the proportion of
+    bitumen wells within the buffer area. Bitumen wells are defined as,
+    ground cleared for an oil/gas well pad where at least one well is
+    currently active.
+-   **WELL-GAS;** a numeric variable indicating the proportion of gas
+    wells within the buffer area. Gas wells are defined as, ground
+    cleared for an gas well pad where at least one well is currently
+    active.
+-   **WELL-OIL;** a numeric variable indicating the proportion of oil
+    wells within the buffer. Oil wells are defined as, ground cleared
+    for an oil well pad where at least one well is currently active.
+-   **WELL-OTHER;** a numeric variable indicating the proportion of
+    other wells within the buffer area. Other wells are defined as,
+    ground cleared for an oil/gas well pad where at least one well is
+    currently active.
+-   **WELL-UNKNOWN;** a numeric variable indicating the proportion of
+    unknown wells within the buffer area. Unknown wells are defined as,
+    ground cleared for an oil/gas well pad where at least one well is
+    currently active. Specifically, a ell site - ground cleared, well
+    status unknown or license location.
+-   **WELL_CLEARED_NOT_CONFIRMED;** a numeric variable indicating the
+    proportion of unconfirmed wellpad clearings within the buffer area.
+    Unconfirmed wellpad clearings are defined as, human footprint
+    features related to various industrial activities. Specifically,
+    Roughly square in shape clearing, roughly 90-120 meters wide
+    (approximately 1 ha). Not confirmed as a well pad by available
+    reference sources.
+-   **WELL_CLEARED_NOT_DRILLED;** a numeric variable indicating the
+    proportion of not drilled wells within the buffer area. Not drilled
+    wells are defined as, ground cleared for an oil/gas well pad where
+    at least one well is currently active. Specifically, a well site -
+    confirmation of the boundary outline is provided by reference
+    sources.
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_independent_detections_2021_2022_2023.csv]
 
@@ -590,7 +895,7 @@ submission:**
 
 -   **array;** a factor with 10 levels describing the landscape unit
     (eg., LU01)
--   **camera;**
+-   **camera;** a factor with 430 levels describing the camera site
 -   **site;** a factor with 430 levels where the first element
     abbreviation describes the landscape unit and the second element
     describes the camera site.
@@ -601,14 +906,7 @@ submission:**
     HH:MM:SS
 -   **year:** year in which the independent event was captured
 -   **month;** month in which the independent event was captured (1 to
-    12) 
-
-### DATA-SPECIFIC INFORMATION FOR: [OSM_landcover_HFI_feature_types.csv]
-
--   **Number of variables:** 9
--   **Number of cases/rows:** 106
-
-**Variable List:**
+    12).
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_operating_2021_2022_2023.csv]
 
@@ -625,3 +923,32 @@ submission:**
     describes the camera site.
 -   **date;** day that the camera was active (a new row for each day),
     format: YYY-MM-DD
+
+### DATA-SPECIFIC INFORMATION FOR: [OSM_simple_config_landscapemetrics.csv]
+
+-   **Number of variables:** 15
+-   **Number of cases/rows:** 9461
+-   **NOTE:** An intermediate file wherein all variables used in final
+    analysis are decribed under
+    "processed/OSM_all_covariates_HFI_SBFI_final.csv"
+
+### DATA-SPECIFIC INFORMATION FOR: [OSM_timelapse_2021\_.csv]
+
+-   **Number of variables:** 42
+-   **Number of cases/rows:** 80,649
+
+**Variable List:**
+
+### DATA-SPECIFIC INFORMATION FOR: [OSM_timelapse_2022\_.csv]
+
+-   **Number of variables:** 40
+-   **Number of cases/rows:** 316,635
+
+**Variable List:**
+
+### DATA-SPECIFIC INFORMATION FOR: [OSM_timelapse_2023\_.csv]
+
+-   **Number of variables:** 42
+-   **Number of cases/rows:** 285,978
+
+**Variable List:**
