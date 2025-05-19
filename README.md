@@ -1,6 +1,8 @@
-# OSM Red Squirrel Distribution
+# OSM Red squirrel distribution
 
 Data and code for Brushett et al., 2025 - Life of the edge: industrial footprint and edge effects variably influence the spatial distribution of a boreal small mammal.
+
+------------------------------------------------------------------------
 
 ### GENERAL INFORMATION
 
@@ -26,7 +28,9 @@ Email: emeraldarthurs\@uvic.ca
 
 **Geographic location of data collection:** Oil Sands Region, Alberta, Canada
 
-**Information about funding sources that supported the collection of the data:** do we need this?
+**Information about funding sources that supported the collection of the data:** Funding was provided by the Oil Sands Monitoring (OSM) program, Natural Sciences and Engineering Research Council (NSERC), and University of Victoria's Applied Conservation Macro Ecology (ACME) lab.
+
+------------------------------------------------------------------------
 
 ### SHARING/ACCESS INFORMATION
 
@@ -37,6 +41,8 @@ Email: emeraldarthurs\@uvic.ca
 **Recommended citation for this dataset:** Brushett, A., Arthurs, E., & Fisher, J. (2025). Life of the edge: industrial footprint and edge effects variably influence the spatial distribution of a boreal small mammal [dataset]. <https://github.com/aidanbrushett/OSM_red_squirrel_distribution>
 
 **Recommended citation for this manuscript:** Brushett, A., Arthurs, E., & Fisher, J. (2025). Life of the edge: industrial footprint and edge effects variably influence the spatial distribution of a boreal small mammal. *Add journal information once published.*
+
+------------------------------------------------------------------------
 
 ### DATA & FILE OVERVIEW
 
@@ -136,6 +142,8 @@ This folder contains summary tables used for the production of the final manuscr
 
 -   **OSM_second_model_summary.xlsx;** Beta coefficient estimates, standard errors, and p values for metrics included in the second-ranked model from the model selection table. Standard deviation of the random intercept estimates are also included.
 
+------------------------------------------------------------------------
+
 ### METHODOLOGICAL INFORMATION
 
 **Description of methods used for collection/generation of data:** Methodological details are provided in the manuscript.
@@ -151,6 +159,8 @@ This folder contains summary tables used for the production of the final manuscr
 
 Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology, analyzed the data, and wrote the first draft of the manuscript; Aidan Brushett, Emerald Arthurs, and Jason Fisher collected the data; Jason Fisher oversaw the experimental design; All authors contributed meaningfully to the final draft of the manuscript and gave final approval for publication. Field data were collected by Millicent Gaston, Rebecca Smith, Andrew Barnas, MacGregor Aubertin-Young, Laura Eliuk, Sandra Frey, Nicole Boucher, Shay Marks, Emerald Arthurs, Aidan Brushett, Madison Carlson, Megan Braun, Jamie Clarke, and Marissa Dyck.
 
+------------------------------------------------------------------------
+
 ## PROCESSED DATA
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_all_covariates_correlation_formatted.xlsx]
@@ -161,11 +171,12 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 
 -   **NOTE:** there is a sheet for each buffer size (22 sheets for buffers from 50 m to 5000 m). Covariate names correspond to those in *OSM_all_covariates_HFI_SBFI_final.csv* that were also considered in candidate models. All covariates are described below:
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_all_covariates_HFI_SBFI_final.csv]
 
 -   **Number of variables:** 55
 -   **Number of cases/rows:** 9461
--   **NOTE:** there is a sheet for each buffer size (22 sheets representing 50 m to 5000 m)
 
 **Variable List:**
 
@@ -223,11 +234,12 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **landscape_shei;** a numeric variable indicating the Shannon evenness index within the buffer area. Described at: <https://r-spatialecology.github.io/landscapemetrics/reference/lsm_l_shei.html>
 -   **landscape_siei;** a numeric variable indicating the Simpson evenness index within the buffer area. Described at: [https://r-spatialecology.github.io/landscapemetrics/reference/lsm_l\_siei.html](https://r-spatialecology.github.io/landscapemetrics/reference/lsm_l_shei.html)
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_monthly_detections_2021_2022_2023.csv]
 
 -   **Number of variables:** 7
 -   **Number of cases/rows:** 63,935
--   **NOTE:** there is a sheet for each buffer size (22 sheets)
 
 **Variable List:**
 
@@ -239,13 +251,15 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **presence;** whether a species was present (1) or absent (0) in that given month.
 -   **detections;** number of independent detections of a species in a given month at a given camera site.
 
+------------------------------------------------------------------------
+
 ## RAW DATA
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_coordinates_2021_2022_2023.csv]
 
 -   **Number of variables:** 4
 -   **Number of cases/rows:** 433
--   **NOTE:** Three sites had insufficient data to be included in models, hence the discrepancy in the number of sites between this file and the *processed/* data files
+-   **NOTE:** Some sites had insufficient data to be included in models, hence the discrepancy in the number of sites between this file and the *processed/* data files
 
 **Variable list:**
 
@@ -254,11 +268,15 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **lat**, site latitude in decimal degrees (WGS84)
 -   **long**, site longitude in decimal degrees (WGS84)
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_grouped_config_landscapemetrics.csv]
 
 -   **Number of variables:** 8
 -   **Number of cases/rows:** 9461
--   **NOTE:** An intermediate file wherein all variables used in final analysis are decribed under "processed/OSM_all_covariates_HFI_SBFI_final.csv"
+-   **NOTE:** An intermediate file. All variables carried forward for final analysis are described under "processed/OSM_all_covariates_HFI_SBFI_final.csv"
+
+------------------------------------------------------------------------
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_HFI2021_metrics.csv]
 
@@ -400,6 +418,8 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **WELL_CLEARED_NOT_CONFIRMED;** a numeric variable indicating the proportion of unconfirmed wellpad clearings within the buffer area. Unconfirmed wellpad clearings are defined as, human footprint features related to various industrial activities. Specifically, Roughly square in shape clearing, roughly 90-120 meters wide (approximately 1 ha). Not confirmed as a well pad by available reference sources.
 -   **WELL_CLEARED_NOT_DRILLED;** a numeric variable indicating the proportion of not drilled wells within the buffer area. Not drilled wells are defined as, ground cleared for an oil/gas well pad where at least one well is currently active. Specifically, a well site - confirmation of the boundary outline is provided by reference sources.
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_independent_detections_2021_2022_2023.csv]
 
 -   **Number of variables:** 8
@@ -417,6 +437,8 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **year:** year in which the independent event was captured
 -   **month;** month in which the independent event was captured (1 to 12).
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_operating_2021_2022_2023.csv]
 
 -   **Number of variables:** 4
@@ -429,11 +451,15 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **site;** a factor with 430 levels where the first element abbreviation describes the landscape unit and the second element describes the camera site.
 -   **date;** day that the camera was active (a new row for each day), format: YYYY-MM-DD
 
+------------------------------------------------------------------------
+
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_simple_config_landscapemetrics.csv]
 
 -   **Number of variables:** 15
 -   **Number of cases/rows:** 9461
--   **NOTE:** An intermediate file wherein all variables used in final analysis are decribed under "processed/OSM_all_covariates_HFI_SBFI_final.csv"
+-   **NOTE:** An intermediate file. All variables carried forward for the final analysis are described under "processed/OSM_all_covariates_HFI_SBFI_final.csv"
+
+------------------------------------------------------------------------
 
 ### DATA-SPECIFIC INFORMATION FOR: [OSM_timelapse_2021.csv], [OSM_timelapse_2022.csv], and [OSM_timelapse_2023.csv]
 
@@ -484,3 +510,39 @@ Aidan Brushett and Emerald Arthurs conceived the study, designed the methodology
 -   **month**, numeric, month the image was taken
 -   **day**, numeric, day the image was taken
 -   **year**, numeric, year the image was taken
+
+------------------------------------------------------------------------
+
+### DATA-SPECIFIC INFORMATION FOR: [OSM_SBFI2020_metrics.csv]
+
+-   **Number of variables:** 111
+-   **Number of cases/rows:** 9526
+
+**Variable List:**
+
+-   **array;** a factor with 10 levels describing the landscape unit in which a camera was deployed
+-   **buffer;** a numeric measurement in meters ranging from 50 - 5000, of the buffer radius around the camera for which the proportion of associated human factors variables were calculated.
+-   **site;** a factor with 430 levels where the first element abbreviation describes the landscape unit and the second element describes the camera site.
+-   **buffer_dist;** the radius of the circular buffer (in meters) around each camera site for which variables were extracted
+-   **AGE\_[year1]\_[year2]:** proportion of the circular buffer area composed of forest within the given age class relative to the year 2020, which is sorted by decade. e.g. for forest 20-30 years old, the variable name is AGE_20_30.
+-   **LC_BROADLEAF;** a numeric variable indicating the proportion of broadleaf forest within the buffer area.
+-   **LC_CONIFER;** a numeric variable indicating the proportion of conifer forest within the buffer area.
+-   **LC_HERBS;** a numeric variable indicating the proportion of herb within the buffer area.
+-   **LC_MIXEDWOOD;** a numeric variable indicating the proportion of mixedwood forest within the buffer area.
+-   **LC_SHRUBS;** a numeric variable indicating the proportion of shrubs within the buffer area.
+-   **LC_WATER;** a numeric variable indicating the proportion of water within the buffer area.
+-   **LC_WETLAND;** a numeric variable indicating the proportion of wetland within the buffer area.
+-   **LC_WETLAND_TREED;** a numeric variable indicating the proportion of treed wetland within the buffer area.
+-   **LC_SNOW_ICE;** a numeric variable indicating the proportion of permanent snow/ice within the buffer area.
+-   **LC_ROCK_RUBBLE;** a numeric variable indicating the proportion of rock/rubble landcover within the buffer area.
+-   **LC_EXPOSED_BARREN;** a numeric variable indicating the proportion of exposed, non-vegetated land cover within the buffer area.
+-   **LC_BRYOIDS;** a numeric variable indicating the proportion of land covered by bryoids within the buffer area.
+-   **LARI.LAR_PCT_OF_TREED;** a numeric variable indicating the proportion of Larix laricina (Tamarack) within the buffer area.
+-   **PICE.GLA_PCT_OF_TREED;** a numeric variable indicating the proportion of Larix laricina (White spruce) within the buffer area.
+-   **PICE.MAR_PCT_OF_TREED;** a numeric variable indicating the proportion of Picea mariana (Black spruce) within the buffer area.
+-   **PINU.BAN_PCT_OF_TREED;** a numeric variable indicating the proportion of Pinus banksaina (Jack pine) within the buffer area.
+-   **POPU.TRE_PCT_OF_TREED;** a numeric variable indicating the proportion of Populus tremuloides (Trembling aspen) within the buffer area
+-   **FIRE_PCT\_[year];** a numeric variable indicating the proportion of the buffer area that was burned in a given year. For instance, area burned in 2012 would be represented as *FIRE_PCT_2012.*
+-   **HARVEST_PCT\_[year];** a numeric variable indicating the proportion of the buffer area that was harvested in a given year. For instance, area burned in 2012 would be represented as *HARVEST_PCT_2012. **\*Note that timber harvest values used in the analysis are from the ABMI 2021 HFI, not from this 2020 SBFI.***
+
+------------------------------------------------------------------------
