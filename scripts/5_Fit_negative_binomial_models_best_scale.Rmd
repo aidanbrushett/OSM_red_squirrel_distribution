@@ -1065,7 +1065,7 @@ anova(m_edgeXcfi_noranef, m_edgeXcfi)
 summary(top_model)
 ```
 
-## 7.2. Odds ratio plots for the conditional model:
+## 7.2. Rate ratio plots for the conditional model:
 
 ```{r}
 # Custom order for the x-axis covariates
@@ -1079,7 +1079,7 @@ custom_order <- c(
   "Edge Density × \nSite Disturbance"
   )
 
-odds_fig_top <- 
+rate_fig_top <- 
   
 confint(top_model) %>%
   
@@ -1120,7 +1120,7 @@ confint(top_model) %>%
 
     # add labels
     labs(x = '',
-         y = 'Odds Ratio (standardized)') +
+         y = 'Rate ratio (standardized)') +
   
       annotate("text",
            x = 0.5,        # Left edge of panel
@@ -1146,11 +1146,11 @@ confint(top_model) %>%
 
 odds_fig_top
   
-ggsave(odds_fig_top, file = "./figures/top_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
+ggsave(odds_fig_top, file = "./figures/top_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
 ```
 
 
-## 7.3. Odds ratio plots for the second-place model
+## 7.3. Rate ratio plots for the second-place model
 
 ```{r}
 # Custom order for the x-axis covariates
@@ -1164,7 +1164,7 @@ custom_order <- c(
   "Pipelines & \nTransmission Lines"
   )
 
-odds_fig_second <-
+rate_fig_second <-
 
 # Exact same code as before, not annotating because I'm lazy. 
 confint(m_seis_wells) %>%
@@ -1225,21 +1225,21 @@ confint(m_seis_wells) %>%
 
 odds_fig_second
 
-ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_odds_ratios.png", width = 5, height = 3.5)
+ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
 ```
 
 
 ## 7.4. Export the combined top and second-ranking model figures in one!
 
 ```{r}
-ggpubr::ggarrange(odds_fig_top, odds_fig_second, 
+ggpubr::ggarrange(rate_fig_top, rate_fig_second, 
                   ncol = 2, 
                   nrow = 1,
                   align = "hv",
                   labels = c("A", "B")  # Add plot labels
                   )
 
-ggsave("./figures/odds_ratio_top_model_second_model.png", width = 7, height = 4.2, dpi = 700)
+ggsave("./figures/rate_ratio_top_model_second_model.png", width = 7, height = 4.2, dpi = 700)
 ```
 
 

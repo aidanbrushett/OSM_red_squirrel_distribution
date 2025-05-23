@@ -112,7 +112,7 @@ This folder contains various plots generated in the scripts of this repository f
 
 -   **allarrays_monthly_detections.png;** plot depicting the number of detections per month, grouped by landscape unit; generated in the 4_Create_response variable.rmd script
 
--   **odds_ratio_top_model_second_model.png;** plot depiciting the standardized odds ratios for each variable in top models; generated in the 5_Fit_negative_binomial_models_best_scale.rmd script
+-   **rate_ratio_top_model_second_model.png;** plot depiciting the standardized rate ratios for each variable in top models; generated in the 5_Fit_negative_binomial_models_best_scale.rmd script
 
 -   **redsquirrel_neg_binomial_submodel_scale_modelweight.png;** plot depicting the AICc weight of top models for each covariate subset across all buffer sizes; generated in the 5_Fit_negative_binomial_models_best_scale.rmd script
 
