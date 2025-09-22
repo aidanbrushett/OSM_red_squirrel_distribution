@@ -283,7 +283,7 @@ fig_scale <- bind_rows(natural_scale,
                                  "#388E3C")) + 
     
     scale_color_manual(values =c("goldenrod2","darkblue","forestgreen"),
-                       labels =c("Disturbance \ncomposition", "Configuration", "Natural \nlandcover")) +
+                       labels =c("Disturbance \ncomposition", "Disturbance \nconfiguration", "Natural \nlandcover")) +
     #scale_color_viridis_d() + 
   
     theme_bw() + 
@@ -297,18 +297,18 @@ fig_scale <- bind_rows(natural_scale,
   
     labs(x = "Buffer radius (m)",
          y = "AICc weight",
-         color = "Covariate subset") +
+         color = "Variable subset") +
   
     # Remove all grid lines
     theme(panel.grid = element_blank()) + 
   
     # Squirrel icon for funsies. Wrong spp. but whatever. 
-    add_phylopic(
-      uuid = get_uuid(name = "Sciurus vulgaris"),
-      x = 3000,
-     y = 0.34, 
-     height = 0.09
-      ) + 
+    #add_phylopic(
+    #  uuid = get_uuid(name = "Sciurus vulgaris"),
+    #  x = 3000,
+    # y = 0.34, 
+    # height = 0.09
+    #  ) + 
   
     theme(
     legend.position = c(0.98, 0.99),         # Top-right corner
@@ -317,7 +317,7 @@ fig_scale <- bind_rows(natural_scale,
 
 fig_scale
 
-ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", width = 5, height = 3.5, dpi = 500)
+ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", width = 4, height = 3, dpi = 600)
 
 #ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight_logscale.png", width = 7, height = 4, dpi = 500)
 ```
@@ -1144,9 +1144,9 @@ confint(top_model) %>%
     #  height = 0.22
     #  )
 
-odds_fig_top
+rate_fig_top
   
-ggsave(odds_fig_top, file = "./figures/top_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
+ggsave(rate_fig_top, file = "./figures/top_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
 ```
 
 
@@ -1277,7 +1277,7 @@ f_decid <- ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
     # Show unscaled data points for just the buffer distances that we want. 
     geom_rug(data = data%>%filter(buffer_dist==nat_buffer), aes(x = lc_broadleaf), color = "grey20", inherit.aes = FALSE) +
   
-    labs(x = "Broadleaf", 
+    labs(x = "Proportion \nBroadleaf [100 m]", 
          y = NULL) +
       
     scale_x_continuous(expand = c(0, 0)) +  # Remove left blank space
@@ -1328,7 +1328,7 @@ f_conifer <- ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Coniferous", 
+    labs(x = "Proportion Conifer \n[100 m]", 
          y = NULL) +
       
     # Remove empty space on left side of x axis
@@ -1382,7 +1382,7 @@ f_mixedwood <- ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) 
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Mixedwood", 
+    labs(x = "Proportion \nMixedwood [100 m]", 
          y = NULL) +
       
     # Tighten up left side of the x-axis
@@ -1435,7 +1435,7 @@ f_fire <- ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Fire (0–15 years)", 
+    labs(x = "Proportion Fire \n0-15 years [100 m]", 
          y = NULL) +
       
     # No extra white space on x-axis
@@ -1489,7 +1489,7 @@ f_cfi <- ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Site disturbance", 
+    labs(x = "Cumulative Anthro. \nFootprint [2250 m]", 
          y = NULL) +
       
     # Remove padding on left of x-axis
@@ -1546,7 +1546,7 @@ f_edge <- ggeffects::ggpredict(top_model, terms = c("nonanthro_ed [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Edge density", 
+    labs(x = "Anthropogenic Edge \nDensity (m/Ha) [2250 m]", 
          y = NULL) +
       
     # Remove padding on left of x-axis
@@ -1635,7 +1635,7 @@ f_edge_cfi <- ggeffects::ggpredict(
       labels = c("10% quantile", "90% quantile")
     ) +
     scale_fill_manual(
-      values = c('dodgerblue2', 'darkred'),  # Fill colors for clarity
+      values = c('lightblue3', 'darkblue'),  # Fill colors for clarity
       labels = c("10% quantile", "90% quantile")
     ) +
   
@@ -1650,10 +1650,10 @@ f_edge_cfi <- ggeffects::ggpredict(
   
     # Axes and legend
     labs(
-      x = "Anthropogenic edge density (m per Ha)", 
+      x = "Anthropogenic Edge \nDensity (m/Ha) [2250 m]", 
       y = "Expected count",
-      color = "Site \ndisturbance", 
-      fill = "Site \ndisturbance"
+      color = "Cumulative \nAnthropogenic \nFootprint", 
+      fill = "Cumulative \nAnthropogenic \nFootprint"
     ) +
   
     # Trim x and y axis range to what's observed and relevant
@@ -1661,24 +1661,31 @@ f_edge_cfi <- ggeffects::ggpredict(
     scale_y_continuous(limits = c(0, 1.1), expand = c(0, 0)) +
   
     # Clean, minimal theme
-    theme_bw() + 
-    theme(panel.grid = element_blank()) +
-    theme(
-      legend.position = "right",
-      legend.margin = margin(0, 0, 0, 0),
-      legend.box.margin = margin(0, 0, 0, -5),  # Pull legend closer to plot
-      plot.margin = margin(5, 5, 5, 5)           # Optional: adjust plot margins
-    ) +
+theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "right",
+    legend.margin = margin(0, 0, 0, 0),
+    legend.box.margin = margin(0, 0, 0, -5),
+    plot.margin = margin(5, 5, 5, 5),
+    # Transparent background
+    panel.background = element_rect(fill = NA, color = NA),
+    plot.background = element_rect(fill = NA, color = NA),
+    legend.background = element_rect(fill = NA, color = NA),
+    panel.border = element_rect(color = "black", fill = NA , linewidth = 0.6)
+  )
 
     # Optional: add a squirrel icon again for flair :)
-     add_phylopic(
-       uuid = get_uuid(name = "Sciurus vulgaris"),
-       x = 180,
-       y = 0.95, 
-       height = 0.23
-     )
+    # add_phylopic(
+    #   uuid = get_uuid(name = "Sciurus vulgaris"),
+    #   x = 180,
+    #   y = 0.95, 
+    #   height = 0.23
+    # )
 
 # Save it!
+ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction_transparent.png", dpi = 400, width = 7, height = 4)
+
 ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction.png", dpi = 400, width = 7, height = 4)
 ```
 
@@ -1748,7 +1755,7 @@ f_cfi_edge <- ggeffects::ggpredict(
     # Axis labels and legend tweaks
     labs(
       x = "Cumulative site disturbance", 
-      y = "Expected count",
+      y = "Expected Count",
       color = "edge \ndensity \n(m/Ha)", 
       fill = "edge \ndensity \n(m/Ha)"
     ) +
@@ -1776,8 +1783,20 @@ ggsave(f_cfi_edge, file = "./figures/top_model_cfi_edge_interaction.png", dpi = 
 ## 8.8. Combined plot:
 
 ```{r}
+f_icon <- 
+ggplot() + 
+  theme_void() + 
+  theme(
+    plot.background = element_rect(fill = "white", colour = NA) # add background
+  ) +
+  add_phylopic(
+     uuid = get_uuid(name = "Sciurus vulgaris"),
+     x = 1,
+     y = 1, 
+     height = 0.05)
 
-f_full_right <- cowplot::plot_grid(f_edge, f_cfi, ncol = 1, align = "v", axis = "lr")
+
+f_full_right <- cowplot::plot_grid(f_icon, f_cfi, ncol = 1, align = "v", axis = "lr")
 f_full_top <- plot_grid(f_edge_cfi, f_full_right, ncol = 2, rel_widths = c(3, 1))
 f_full_bottom <- plot_grid(f_fire, f_conifer, f_mixedwood, f_decid, nrow = 1, align = "v", axis = "lr")
 
@@ -1785,7 +1804,7 @@ f_full <- plot_grid(f_full_top, f_full_bottom, ncol = 1, rel_heights = c(2, 1), 
 
 plot(f_full)
 
-ggsave(f_full, file = "./figures/top_model_all_effects.png", width = 9, height = 6, dpi = 500)
+ggsave(f_full, file = "./figures/top_model_all_effects.png", width = 6.5, height = 5, dpi = 600)
 
 
 ```

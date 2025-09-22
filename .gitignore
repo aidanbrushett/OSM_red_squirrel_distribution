@@ -77,3 +77,11 @@ maps/HFI_clipped/
 **/rasters/
 rasters/
 data/processed/OSM_all_covariates_correlation_new.xlsx
+
+# Old data or files unused in manuscript submission
+**/data/old/
+**/figures/old/
+**/tables/old/
+**/literature/old/
+**/scripts/old/
+**/scripts/reference/
