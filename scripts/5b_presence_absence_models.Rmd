@@ -64,6 +64,7 @@ library(performance)
 #library(PerformanceAnalytics)
 library(broom.mixed)
 library(cowplot)
+library(ggplot2)
 library(writexl)
 
 `%nin%` <- Negate(`%in%`)
@@ -84,19 +85,85 @@ response <- read_csv("./data/processed/OSM_monthly_detections_2021_2022_2023.csv
   filter(species == "red squirrel") %>%
   
   # Only want detections column
-  select(-species, -presence) %>%
+  select(-species) %>%
   
-  rename(squirrel = detections)
+  rename(squirrel = presence)
+```
 
+Can we make another response that is proportional binomial?
+
+```{r}
+response_prop <- response %>% 
+  
+  group_by(array, site) %>%
+  
+  summarize(n_month = n(), 
+            n_present = sum(squirrel), 
+            n_absent = n_month - n_present
+            )
+```
+Let's visualize the response variable for supporting information:
+
+```{r}
+response_prop %>%
+  
+  mutate(p_present = n_present/n_month) %>%
+  
+ggplot(., aes(x = array, y = p_present)) + 
+  
+  geom_jitter(width = 0.15, alpha = 1, size = 0.6, color = "black") + 
+  
+  #geom_boxplot() +
+  
+  labs(x = "array", 
+       y = "proportion of months present") + 
+  
+  theme_bw() + 
+  
+  theme(
+       axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+       strip.background = element_blank(),  # Remove facet background
+       panel.grid = element_blank(),
+       strip.text = element_text(face = "bold", size = 10)
+       ) + 
+  
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.05)))  # Remove bottom space, keep small top space
+  
+#  rphylopic::add_phylopic(
+#    uuid = get_uuid(name = "Sciurus vulgaris"),
+#    x = 9.5,
+#    y = 0.8, 
+#    height = 0.2
+#   )
+
+ggsave(file = "./figures/allarrays_monthly_detections.png", width = 5, height = 3.2, dpi = 500)
+
+# how many camera months and mean monthly detections?
+response_prop %>%
+  ungroup() %>%
+  summarize(n_months = sum(n_month), 
+            n_present = sum(n_present))
+
+# how many camera months and mean monthly detections?
+response_prop %>%
+  group_by(array) %>%
+  summarize(n_months = sum(n_month), 
+            n_present = sum(n_present))
+```
+
+
+Create the full dataset now:
+
+```{r}
 # Add the covariates to the response variable 
-data <- response %>%
+data <- response_prop %>%
   
   left_join(covs, by = c("array", "site"))
 
 # Make sure there are 20 rows per site/month/year 
 data %>% 
   
-  group_by(site, month, year) %>%
+  group_by(site) %>%
   
   summarize(n_obs = n()) %>%
   
@@ -115,7 +182,7 @@ data_scaled <- data %>%
 # The mean will be 0 even though we grouped first, since the mean for each buffer is still 0. 
 summary(data_scaled)
 
-rm(covs, response)
+rm(covs, response, response_prop)
 ```
 
 ## 1.2. Scale the data and store values
@@ -129,7 +196,7 @@ data_scaled_summary <- data %>%
 
   group_by(buffer_dist) %>%
   
-  pivot_longer(cols = 2:last_col(), values_to = "value", names_to = "variable") %>%
+  pivot_longer(cols = cfi_site:last_col(), values_to = "value", names_to = "variable") %>%
   
   group_by(buffer_dist, variable) %>%
   
@@ -141,9 +208,12 @@ data_scaled_summary <- data %>%
   )
 ```
 
-# 2. Scale analysis:
 
-Another nice way to visualize our results for the scale analysis is to plot the model weight for the global sub-models at each scale.
+
+
+
+
+# 2. Scale analysis:
 
 ## 2.1. Natural sub-model:
 
@@ -152,12 +222,10 @@ natural_scale <- purrr::map(unique(data$buffer_dist), ~{
   
   # Subset the data based on the current buffer distance
   data_subset <- data_scaled %>%
-    
     filter(buffer_dist == .x)
   
   # Fit the initial model for the current buffer distance
-  glmmTMB(squirrel ~ 
-                        
+  glmmTMB(cbind(n_present, n_absent) ~ 
                         lc_coniferous + 
                         lc_mixedwood + 
                         lc_broadleaf +
@@ -166,7 +234,7 @@ natural_scale <- purrr::map(unique(data$buffer_dist), ~{
                         (1|array/site),
                       
                       data = data_subset, 
-                      family = nbinom2, 
+                      family = binomial, 
                       na.action = na.fail)
   }
   ) %>%
@@ -182,125 +250,29 @@ natural_scale <- purrr::map(unique(data$buffer_dist), ~{
                 submodel = "NATURAL")
 ```
 
-
-
-## 2.2. Anthro composition submodel:
-
-```{r}
-comp_scale <- purrr::map(unique(data$buffer_dist), ~{
-
-  # Subset the data based on the current buffer distance
-  data_subset <- data_scaled %>%
-  
-    filter(buffer_dist == .x)
-
-  # Fit the initial model for the current buffer distance
-  glmmTMB(squirrel ~ 
-
-                        pipe_trans + 
-                        seismic + 
-                        wells_inactive + 
-                        #harvest_total +
-                        wells_active +
-                        osm_industrial +
-                        harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-
-                      data = data_subset, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  }
-  ) %>%
-  
-  set_names(unique(data$buffer_dist)) %>%
-  
-  # Model selection and AIC for each scale
-  MuMIn::model.sel(comp_scale) %>%
-  
-  as.data.frame(.) %>%
-   
-  dplyr::mutate(buffer = as.numeric(rownames(.)),
-                submodel = "COMP")
-```
-
-
-
-
-## 2.3. Configuration sub-model:
-
-```{r}
-config_scale <- purrr::map(unique(data$buffer_dist), ~{
-  
-  # Subset the data based on the current buffer distance
-  data_subset <- data_scaled %>%
-    
-    filter(buffer_dist == .x)
-  
-  # Fit the initial model for the current buffer distance
-  glmmTMB(squirrel ~ 
-
-                        # configuration variables
-                        landscape_shei +
-                        nonanthro_ed +
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_subset, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  }
-  ) %>%
-
-  set_names(unique(data$buffer_dist)) %>% 
-  
-  # Model selection and AIC for each scale
-  MuMIn::model.sel(config_scale) %>%
-  
-  as.data.frame(.) %>%
-   
-  dplyr::mutate(buffer = as.numeric(rownames(.)),
-                submodel = "CONFIG")
-```
-
-## 2.4. Let's put it all together into a plot:
+Let's plot it here: 
 
 ```{r}
 # One big data frame
-fig_scale <- bind_rows(natural_scale, 
-                       comp_scale,
-                       config_scale) %>%
+fig_scale <- natural_scale %>%
   
   # Plot the model weights as a line.
-  ggplot(., aes(x = buffer, y = weight, color = submodel)) + 
+  ggplot(., aes(x = buffer, y = weight)) + 
   
-    geom_line(size = 1, alpha = 0.7) + 
-  
-    # Old color scheme I didn't like (overwritten)
-    scale_color_manual(values =c("#D24D57",
-                                 "#1976D2",
-                                 "#388E3C")) + 
-    
-    scale_color_manual(values =c("goldenrod2","darkblue","forestgreen"),
-                       labels =c("Disturbance \ncomposition", "Disturbance \nconfiguration", "Natural \nlandcover")) +
-    #scale_color_viridis_d() + 
+    geom_line(size = 1, alpha = 0.7, color = "forestgreen") + 
   
     theme_bw() + 
     
     # Crop the axis since model weights are low
-    scale_y_continuous(limits = c(0, 0.41), expand = expansion(add = c(0, 0))) + 
+    #scale_y_continuous(limits = c(0, 0.41), expand = expansion(add = c(0, 0))) + 
   
-    scale_x_continuous(expand = c(0,0), limits = c(0, 5100)) +
+    #scale_x_continuous(limits = c(-100, 5100)) +
 
     #scale_x_log10(expand = c(0,0), limits = c(50, 5100)) +
   
     labs(x = "Buffer radius (m)",
          y = "AICc weight",
-         color = "Variable subset") +
+         title = "Natural landcover scale dredge") + 
   
     # Remove all grid lines
     theme(panel.grid = element_blank()) + 
@@ -320,10 +292,68 @@ fig_scale <- bind_rows(natural_scale,
 
 fig_scale
 
-ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight.png", width = 4, height = 3, dpi = 600)
+ggsave("./figures/redsquirrel_proportional_binomial_submodel_scale_modelweight.png", width = 4, height = 3, dpi = 600)
 
 #ggsave("./figures/redsquirrel_neg_binomial_submodel_scale_modelweight_logscale.png", width = 7, height = 4, dpi = 500)
 ```
+
+
+```{r}
+covs_formatted <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
+
+
+fig_scale_effectsize <- natural_scale %>%
+  # Clean up the output, thanks Claude
+  
+  select(-contains(c("Int", "df", "logLik", "AICc", "delta", "weight", "buffer", "submodel"))) %>%
+
+  dplyr::rename_with(~ stringr::str_remove_all(.x, "cond\\(|\\)|\\.\\.\\.|#|disp\\(|\\(")) %>%
+  
+  mutate(buffer_dist = as.numeric(rownames(.))) %>%
+  
+  pivot_longer(
+    cols = -buffer_dist,
+    names_to = "variable",
+    values_to = "effect_size"
+    ) %>%
+  
+  left_join(., covs_formatted, by = c("variable"="Covariate")) %>%
+  
+  # Generate the tile plot
+  ggplot(., aes(x = factor(buffer_dist), y = PrettyName, fill = effect_size)) +
+  
+    geom_tile(color = "white") +
+    scale_fill_gradient2(
+      low = "firebrick", 
+      mid = "white", 
+      high = "dodgerblue4", 
+      midpoint = 0
+    ) +
+  
+  geom_text(
+    data = . %>% filter(buffer_dist == 100),
+    aes(label = "*"),
+    size = 5,
+    color = "black"
+  ) +
+  
+  labs(
+      x = "Buffer Distance (m)",
+      y = "",
+      fill = "Effect Size",
+      title = "Natural landcover dredge"
+    ) +
+  
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+    )
+    
+fig_scale_effectsize
+
+ggsave(file = "./figures/natural_prop_binomial_scale_effectsizes.png", width = 8, height = 2.5)
+```
+
 
 ## 2.5. Identify top scales:
 
@@ -331,63 +361,399 @@ What are the numbers from the above scale analysis?
 
 ```{r}
 natural_scale$buffer[1]
-comp_scale$buffer[1]
-config_scale$buffer[1]
+
+# Clean up
+rm(natural_scale)
 ```
 
-Store them manually here before we move to the next step.
+
+
+
+
+
+# 4. Fit some models...
 
 ```{r}
-# Let's specify these values manually. This means we don't need to re-run this every time we open a new R session. 
+# 1. Define the base random effects and common data parameters
+random_effects <- "(1|array/site)"
+
+# 2. Define a named list of formulas
+model_formulae <- list(
+  m_null = as.formula(paste("cbind(n_present, n_absent) ~", 
+                            random_effects)),
+  
+  m_fire = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 +", 
+                            random_effects)),
+  
+  m_forest = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf +", 
+                              random_effects)),
+  
+  m_forest_fire = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 +", 
+                                   random_effects)),
+  
+#  m_landcover = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + lc_shrubs + lc_wetland + #lc_wetland_treed +", 
+#                                 random_effects)),
+  
+#  m_landcover_fire = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + lc_shrubs + lc_wetland + lc_wetland_treed + fire_0_15 +", 
+#                                      random_effects)),
+  
+  m_seis_wells = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + pipe_trans + seismic + wells_inactive +", random_effects)),
+  
+  m_harvest = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + harvest_0_15 +", random_effects)),
+  
+  m_harvest_seis = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + pipe_trans + seismic + wells_inactive + harvest_0_15 +", random_effects)),
+  
+  m_active = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + wells_active + osm_industrial +", random_effects)),
+  
+  m_active_harvest = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + wells_active + osm_industrial + harvest_0_15 +", random_effects)),
+  
+  m_active_seis = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + pipe_trans + seismic + wells_inactive + wells_active + osm_industrial +", random_effects)),
+  
+  m_active_seis_harvest = as.formula(paste("cbind(n_present, n_absent) ~ lc_coniferous + lc_mixedwood + lc_broadleaf + fire_0_15 + pipe_trans + seismic + wells_inactive + wells_active + osm_industrial + harvest_0_15 +", 
+                                           random_effects)),
+  
+  m_het = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + landscape_shei +", 
+                           random_effects)),
+  
+  m_edge = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed +", 
+                            random_effects)),
+  
+  m_cohesion = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_cohesion +", 
+                                random_effects)),
+  
+  m_cohesion_mesh = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_cohesion + landscape_mesh +", 
+                                     random_effects)),
+  
+  m_cohesion_shei = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_cohesion + landscape_shei +", 
+                                     random_effects)),
+  
+  m_conn = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + landscape_mesh +", 
+                            random_effects)),
+  
+  m_edge_conn = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed + landscape_mesh +", 
+                                 random_effects)),
+  
+  m_het_conn = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + landscape_shei + landscape_mesh +", 
+                                random_effects)),
+  
+  m_het_edge = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + landscape_shei + nonanthro_ed +", 
+                                random_effects)),
+  
+  m_config = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + landscape_shei + nonanthro_ed + landscape_mesh +", 
+                              random_effects)),
+  
+  m_edge_cfi = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed + cfi_site +", 
+                                random_effects)),
+  
+  m_edgeXcfi = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +", 
+                                random_effects))
+)
+```
+
+Now fit the models at multiple scales. First, what are the scales for the variables that we are gonna use?
+
+```{r}
+# Fit the initial model for the current buffer distance
+anthro_buffer <- seq(1000, 5000, by=500)
 nat_buffer <- 100
-comp_buffer <- 4250
-config_buffer <- 2250
 ```
 
-# 3. Construct the final dataset (best spatial scales)
-
-We will pull out the predictors from the submodels **at the appropriate spatial scales** and merge this into one big dataset for final models. This selects a couple extra columns that we don't actually want to model but that's fine, this was efficient *#sueme*
+Fit the models sequentially at all scales: 
 
 ```{r}
+models_allscales <- map_dfr(anthro_buffer, function(i){
+  
+  print(i)
+  
+  data_final_scaled <- bind_cols(
+    
+    # Response variables:
+    data_scaled %>%
+      select(array:n_absent) %>%
+      distinct(), 
+    
+    # natural data scaled to 100m
+    data_scaled %>% 
+      filter(buffer_dist == nat_buffer) %>%
+      select(fire_0_15:lc_wetland_treed) %>%
+      mutate(natural_buffer = nat_buffer), # won't use this column, just keeping track of the scale somehow
+    
+    # composition data scaled by composition buffer
+    data_scaled %>% 
+      filter(buffer_dist == i) %>%
+      select(harvest_0_15:wells_total) %>%
+      mutate(anthro_buffer = i), # won't use this column, just keeping track of the scale somehow
+    
+    # configuration data
+    data_scaled %>% 
+      filter(buffer_dist == i) %>%
+      select(contains("nonanthro") | contains("landscape") | contains("cfi"))
+    )
+
+
+  # 3. Fit all models efficiently
+  models <- map(model_formulae, ~do.call(glmmTMB, c(list(formula = .x,
+                                                         data = data_final_scaled,
+                                                         family = binomial,
+                                                         na.action = na.fail))
+  ))
+  
+  #rm(m_nat_comp_config2)
+  # Pull all models from the global environment 
+  #models <- mget(ls(pattern = "m_"))
+  
+  # PErform model selection on them 
+  models_rank <- MuMIn::model.sel(models) %>%
+    
+      as.data.frame(.) %>%
+      
+      select(-`disp((Int))`) %>%
+    
+      # Tidy up the disgusting glmmTMB names (thanks ChatGPT!!)
+      rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
+      
+      rename(intercept = `Int`) %>%
+    
+      mutate(model = rownames(.),
+             buffer_dist = i) %>%
+  
+      # Model at the first row
+      relocate(model)
+  
+  return(models_rank)
+
+})
+```
+
+
+What's the scale of the top performing model?
+
+```{r}
+best_scale <- models_allscales %>%
+  slice_min(AICc) %>%
+  pull(buffer_dist)
+```
+
+Let's plot the effect sizes across all scales for these, the same way we did before with the natural landcover dredge:
+
+Landscape effects from the model dredge: 
+
+```{r}
+fig_matrix_effects <- models_allscales %>%
+  
+  filter(delta == 0) %>%
+    
+  select(-contains(c("Int", "df", "logLik", "AICc", "delta", "weight", "submodel", "model"))) %>%
+  
+  pivot_longer(
+    cols = -buffer_dist,
+    names_to = "variable",
+    values_to = "effect_size"
+    ) %>%
+  
+  left_join(., covs_formatted, by = c("variable"="Covariate")) %>%
+  
+  drop_na(effect_size) %>%
+  
+  # Fix a couple manually
+  mutate(PrettyName = case_when(
+    variable == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
+    variable == "cfi_site:nonanthro_ed" ~ "Edge Density × \nCumulative Disturbance",
+    TRUE ~ PrettyName)) %>%
+  
+  
+  filter(PrettyName %in% c(
+  "Cumulative Disturbance",
+  "Edge Density",
+  "Edge Density × \nCumulative Disturbance"
+  )) %>%
+  
+  # Generate the tile plot
+  ggplot(., aes(x = factor(buffer_dist), y = PrettyName, fill = effect_size)) +
+  
+    geom_tile(color = "white") +
+    scale_fill_gradient2(
+      low = "firebrick", 
+      mid = "white", 
+      high = "dodgerblue4", 
+      midpoint = 0
+    ) +
+  
+    geom_text(
+    data = . %>% filter(buffer_dist == best_scale),
+    aes(label = "*"),
+    size = 5,
+    color = "black"
+  ) +
+  
+  labs(
+      x = "Modeled scale (m)",
+      y = NULL,
+      title = "Landscape-level predictors",
+      fill = "Effect Size"
+    ) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),     # Removes all grid lines
+    axis.ticks = element_blank(),     # Removes all axis ticks
+    legend.position = "none"
+    )
+```
+
+Site effects from the natural cover, to show they are stable across models:
+
+```{r}
+fig_site_effects <- models_allscales %>%
+  
+  filter(delta == 0) %>%
+    
+  select(-contains(c("Int", "df", "logLik", "AICc", "delta", "weight", "submodel", "model"))) %>%
+  
+  pivot_longer(
+    cols = -buffer_dist,
+    names_to = "variable",
+    values_to = "effect_size"
+    ) %>%
+  
+  left_join(., covs_formatted, by = c("variable"="Covariate")) %>%
+  
+  drop_na(effect_size) %>%
+  
+
+  filter(PrettyName %in% c(
+    "Broadleaf",
+    "Mixedwood",
+    "Coniferous",
+    "Fire <15"
+  )) %>%
+  
+  # Generate the tile plot
+  ggplot(., aes(x = factor(buffer_dist), y = PrettyName, fill = effect_size)) +
+  
+    geom_tile(color = "white") +
+    scale_fill_gradient2(
+      low = "firebrick", 
+      mid = "white", 
+      high = "dodgerblue4", 
+      midpoint = 0
+    ) +
+  
+    geom_text(
+    data = . %>% filter(buffer_dist == best_scale),
+    aes(label = "*"),
+    size = 5,
+    color = "black"
+  ) +
+  
+  labs(
+      x = NULL,
+      y = NULL,
+      title = "Site-level predictors (modeled at 100 m)",
+      fill = "Effect Size"
+    ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),     # Removes all grid lines
+    axis.ticks = element_blank(),     # Removes all axis ticks
+    legend.position = "none"
+    )
+```
+
+Snag the legend from one of them for the cowplot:
+
+```{r}
+# 2. Extract the legend from one of the plots
+legend <- get_legend(
+  fig_site_effects + theme(legend.position = "right",
+                           legend.background = element_rect(fill = "white", color = NA)) # color = NA removes the border)
+)
+```
+
+Combine the plots:
+
+```{r}
+fig_scale_fullmodels <- plot_grid(fig_site_effects, fig_matrix_effects, ncol = 1, 
+                                  align = "hv", axis = "lr", 
+                                  rel_heights = c(1, 0.835))
+fig_scale_fullmodels <- plot_grid(fig_scale_fullmodels, legend, ncol = 2, rel_widths = c(1, 0.1)) + 
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
+fig_scale_fullmodels
+
+ggsave(file = "./figures/fullmodel_prop_binomial_scale_effectsizes.png", width = 8, height = 4)
+```
+
+
+Let's re-fit the top model again using the best scale, so we can perform our diagnostics/data visualization. 
+
+```{r}
+nat_buffer <- 100
+best_scale <- best_scale
+
 data_final_scaled <- bind_cols(
-  
-  # response variables
+    
+  # Response variables:
   data_scaled %>%
-    select(1:squirrel) %>%
-    distinct(),
-  
-  # natural data scaled by natural buffer
+    select(array:n_absent) %>%
+    distinct(), 
+    
+  # natural data scaled to 100m
   data_scaled %>% 
     filter(buffer_dist == nat_buffer) %>%
     select(fire_0_15:lc_wetland_treed) %>%
     mutate(natural_buffer = nat_buffer), # won't use this column, just keeping track of the scale somehow
-  
+    
   # composition data scaled by composition buffer
   data_scaled %>% 
-    filter(buffer_dist == comp_buffer) %>%
+    filter(buffer_dist == best_scale) %>%
     select(harvest_0_15:wells_total) %>%
-    mutate(comp_buffer = comp_buffer), # won't use this column, just keeping track of the scale somehow
-  
+    mutate(anthro_buffer = best_scale), # won't use this column, just keeping track of the scale somehow
+    
   # configuration data
   data_scaled %>% 
-    filter(buffer_dist == config_buffer) %>%
-    select(contains("nonanthro") | contains("landscape") | contains("cfi")) %>%
-    mutate(config_buffer = config_buffer) # won't use this column, just keeping track of the scale somehow
-  ) %>%
-  
-  relocate(contains("buffer"), .after=("squirrel")) %>%
-  
-  select(-landscape_ed, -landscape_tca, -landscape_cai_mn)
+    filter(buffer_dist == best_scale) %>%
+    select(contains("nonanthro") | contains("landscape") | contains("cfi"))
+    )
 
-summary(data_final_scaled)
+top_model <- glmmTMB(cbind(n_present, n_absent) ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site +
+                        nonanthro_ed*cfi_site +
+                        #landscape_mesh +
+
+                        (1|array/site),
+
+                      data = data_final_scaled, 
+                      family = binomial, 
+                      na.action = na.fail)
 ```
+
+We should have done this before model fitting, but at least now we can look at the correlations in our final model/scale to make sure everything is A-okay. 
 
 Let's look at the correlation among this final set of candidate variables at their respective spatial scales:
 
 ```{r}
 data_final_corr <- data_final_scaled %>%
   
-  select(9:ncol(.)) %>%
+  select(-natural_buffer, 
+         -anthro_buffer,
+         -cfi_site_with_harvest, 
+         -cfi_site_with_vegedges, 
+         -nonanthro_cai_mn, 
+         -nonanthro_tca
+  ) %>%
+  
+  select(6:ncol(.)) %>%
   
   corrr::correlate(., use = "pairwise.complete.obs", 
                                            method = "pearson", 
@@ -418,537 +784,23 @@ Let's make a table for the Supporting Information to show high correlations.
 covs_formatted <- read_csv("./tables/OSM_all_covariates_formatted_names.csv")
 
 xxx <- data_final_corr %>% 
-  filter(var1 != "cfi_site_with_harvest" & var2 != "cfi_site_with_harvest",
-         var1 != "cfi_site_with_vegedges" & var2 != "cfi_site_with_vegedges",
-         var1 != "nonanthro_cai_mn" & var2 != "nonanthro_cai_mn",
-         var1 != "nonanthro_tca" & var2 != "nonanthro_tca") %>%
+
   left_join(covs_formatted, by = c("var1" = "Covariate")) %>%
   mutate(var1 = PrettyName) %>%
   select(-PrettyName) %>%
   left_join(covs_formatted, by = c("var2" = "Covariate")) %>%
   mutate(var2 = PrettyName) %>%
   select(-PrettyName) %>%
-  drop_na() %>%
-  filter(abs(corr)>0.50)
+  drop_na()
 
-writexl::write_xlsx(xxx, "./tables/final_dataset_high_correlation.xlsx")
+writexl::write_xlsx(xxx, "./tables/OSM_final_dataset_high_correlation.xlsx")
 ```
 
-
-# 4. Fit models using the best-fit scales for each 'category' of variables.
-
-nbinom2 allows the variance to increase with the square of the mean, which seemed to be the best fit to our data (vs nbinom1) in an initial exploration of AIC scores (huge drop in AICc)
 
 ```{r}
-m_null <- glmmTMB(squirrel ~ # Squirrel as response variable
-                        
-                        #lc_coniferous + 
-                        #lc_mixedwood + 
-                        #lc_broadleaf + 
-                        #lc_shrubs +
-                        #lc_herbs +
-                        #fire_0_15 + 
-
-                        (1|array/site), # Nested random effects for every model
-                      
-                      data = data_final_scaled, # Scaled data as the data
-                      family = nbinom2,  # nbinom2 specification
-                      na.action = na.fail) # fail the model if there are NAs. Probably a data error. 
-  
-# Not gonna annotate every model since it should be obvious by now. 
-m_fire <- glmmTMB(squirrel ~ 
-                        
-                        #lc_coniferous + 
-                        #lc_mixedwood + 
-                        #lc_broadleaf + 
-                        #lc_shrubs +
-                        #lc_herbs +
-                        fire_0_15 + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  
-m_forest <- glmmTMB(squirrel ~ 
-                        
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        #lc_shrubs +
-                        #lc_herbs +
-                        #fire_0_15 + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-m_forest_fire <- glmmTMB(squirrel ~ 
-                        
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf +
-                        #lc_shrubs +
-                        #lc_herbs +
-                        fire_0_15 + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  
-m_landcover <- glmmTMB(squirrel ~ 
-                        
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        lc_shrubs +
-                        lc_wetland +
-                        lc_wetland_treed + 
-                        #fire_0_15 + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-m_landcover_fire <- glmmTMB(squirrel ~ 
-                        
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        lc_shrubs +
-                        lc_wetland +
-                        lc_wetland_treed + 
-                        fire_0_15 + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-
-  m_seis_wells <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                          
-                        pipe_trans + 
-                        seismic + 
-                        wells_inactive + 
-                        #harvest_total +
-                        #wells_active +
-                        #osm_industrial +
-                        #harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_harvest <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                         
-                        #pipe_trans + 
-                        #seismic + 
-                        #wells_inactive + 
-                        #harvest_total +
-                        #wells_active +
-                        #osm_industrial +
-                        harvest_0_15 +
-                        #roads + + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_harvest_seis <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                              
-                        pipe_trans + 
-                        seismic + 
-                        wells_inactive + 
-                        #harvest_total +
-                        #wells_active +
-                        #osm_industrial +
-                        harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  
-  m_active <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                        
-                        #pipe_trans + 
-                        #seismic + 
-                        #wells_inactive + 
-                        #harvest_total +
-                        wells_active +
-                        osm_industrial +
-                        #harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_active_harvest <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                          
-                        #pipe_trans + 
-                        #seismic + 
-                        #wells_inactive + 
-                        #harvest_total +
-                        wells_active +
-                        osm_industrial +
-                        harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_active_seis <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                        
-                        pipe_trans + 
-                        seismic + 
-                        wells_inactive + 
-                        #harvest_total +
-                        wells_active +
-                        osm_industrial +
-                        #harvest_0_15 +
-                        #roads + 
-                          
-                      (1|array/site),
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-
-  m_active_seis_harvest <- glmmTMB(squirrel ~ 
-                        lc_coniferous + 
-                        lc_mixedwood + 
-                        lc_broadleaf + 
-                        fire_0_15 + 
-                        
-                        pipe_trans + 
-                        seismic + 
-                        wells_inactive + 
-                        #harvest_total +
-                        wells_active +
-                        osm_industrial +
-                        harvest_0_15 +
-                        #roads + 
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-
-    m_het <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        landscape_shei +
-                        #nonanthro_ed + 
-                        #landscape_mesh +
-                         
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_edge <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        nonanthro_ed + 
-                        #landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  
-    m_cohesion <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        nonanthro_cohesion +
-                        #landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-    
-  m_cohesion_mesh <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        nonanthro_cohesion +
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-        
-  m_cohesion_shei <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        nonanthro_cohesion +
-                        #landscape_mesh +
-                        landscape_shei +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-                    
-  m_conn <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        #nonanthro_ed + 
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_edge_conn <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood +
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        nonanthro_ed + 
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-
-  m_het_conn <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        landscape_shei +
-                        #nonanthro_ed + 
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-    
-  m_het_edge <- glmmTMB(squirrel ~
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood +
-                      
-                        # configuration variables
-                        landscape_shei +
-                        nonanthro_ed +
-                        #landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_config <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood +
-                      
-                        # configuration variables
-                        landscape_shei +
-                        nonanthro_ed +
-                        landscape_mesh +
-
-                        (1|array/site),
-                      
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_edge_cfi <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        nonanthro_ed + 
-                        cfi_site +
-                        #landscape_mesh +
-
-                        (1|array/site),
-
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
-  
-  m_edgeXcfi <- glmmTMB(squirrel ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        nonanthro_ed + 
-                        cfi_site +
-                        nonanthro_ed*cfi_site +
-                        #landscape_mesh +
-
-                        (1|array/site),
-
-                      data = data_final_scaled, 
-                      family = nbinom2, 
-                      na.action = na.fail)
 
 ```
 
-# 5. Perform model selection
-
-Let's gather all the models into a list and perform model selection:
-
-```{r}
-#rm(m_nat_comp_config2)
-
-# Pull all models from the global environment 
-models <- mget(ls(pattern = "m_"))
-
-# PErform model selection on them 
-models_rank <- MuMIn::model.sel(models) %>%
-  
-    as.data.frame(.) %>%
-    
-    select(-`disp((Int))`) %>%
-  
-    # Tidy up the disgusting glmmTMB names (thanks ChatGPT!!)
-    rename_with(~ gsub("cond\\(|disp\\(|\\)|\\(", "", .)) %>%
-    
-    rename(intercept = `Int`) %>%
-  
-    mutate(model = rownames(.)) %>%
-
-    # Model at the first row
-    relocate(model)
-
-models_rank
-
-# Fetch the top model
-top_model <- get(ls(pattern = rownames(models_rank[1]))[1])
-# Or explore any model manually using the same code...
-top_model <- m_edgeXcfi
-```
 
 # 6. Model inspection and validation
 
@@ -983,9 +835,9 @@ performance::check_overdispersion(top_model)
 ## 6.4. Check other diagnostics including VIFs. 
 
 ```{r}
-performance::check_model(top_model)
+#performance::check_model(top_model)
 
-ggsave("./figures/top_model_neg_binomial_diagnostics.png", height = 12, width = 9)
+#ggsave("./figures/top_model_proportional_binomial_diagnostics.png", height = 12, width = 9)
 ```
 
 ## 6.5. Variance inflation factors:
@@ -1001,7 +853,7 @@ performance::check_collinearity(top_model) %>%
   
   # Manual fix for a couple of them
   mutate(PrettyName = case_when(
-    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
     TRUE ~ PrettyName)) %>%
   
   # plot with ggplot
@@ -1027,13 +879,14 @@ performance::check_collinearity(top_model) %>%
   
     theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels by 45 degrees
 
-ggsave("./figures/top_model_neg_binomial_VIF.png", dpi=500, width = 5, height = 3.5)
+ggsave("./figures/top_model_proportional_binomial_VIF.png", dpi=500, width = 5, height = 3.5)
 ```
+
 
 ## 6.6. Likelihood ratio test for random effect structure:
 
 ```{r}
-  m_edgeXcfi_noranef <- glmmTMB(squirrel ~ 
+m_edgeXcfi_noranef <- glmmTMB(cbind(n_present, n_absent) ~ 
                         
                         # natural covariates
                         fire_0_15 +
@@ -1045,19 +898,47 @@ ggsave("./figures/top_model_neg_binomial_VIF.png", dpi=500, width = 5, height = 
                         #landscape_shei +
                         nonanthro_ed + 
                         cfi_site +
-                        nonanthro_ed*cfi_site,
+                        nonanthro_ed*cfi_site +
                         #landscape_mesh +
 
-                        #(1|array/site),
+                        (1|site),
 
                       data = data_final_scaled, 
-                      family = nbinom2, 
+                      family = binomial, 
+                      na.action = na.fail)
+
+
+m_edgeXcfi_noranef2 <- glmmTMB(cbind(n_present, n_absent) ~ 
+                        
+                        # natural covariates
+                        fire_0_15 +
+                        lc_broadleaf +
+                        lc_coniferous +
+                        lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site +
+                        nonanthro_ed*cfi_site + 
+                        #landscape_mesh +
+                        
+                        (1|array/site),
+
+                      data = data_final_scaled, 
+                      family = binomial, 
                       na.action = na.fail)
 
 summary(m_edgeXcfi_noranef)
+summary(m_edgeXcfi_noranef2)
 
-anova(m_edgeXcfi_noranef, m_edgeXcfi)
+performance::check_overdispersion(m_edgeXcfi_noranef)
+
+anova(m_edgeXcfi_noranef, m_edgeXcfi_noranef2)
 ```
+
+
+
 
 
 
@@ -1069,7 +950,7 @@ anova(m_edgeXcfi_noranef, m_edgeXcfi)
 summary(top_model)
 ```
 
-## 7.2. Rate ratio plots for the conditional model:
+## 7.2. Odds ratio plots for the top model:
 
 ```{r}
 # Custom order for the x-axis covariates
@@ -1078,9 +959,9 @@ custom_order <- c(
   "Mixedwood",
   "Coniferous",
   "Fire <15",
-  "Site Disturbance",
+  "Cumulative Disturbance",
   "Edge Density",
-  "Edge Density × \nSite Disturbance"
+  "Edge Density × \nCumulative Disturbance"
   )
 
 rate_fig_top <- 
@@ -1103,7 +984,7 @@ confint(top_model) %>%
   
   # Fix a couple manually
   mutate(PrettyName = case_when(
-    term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nSite Disturbance",
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
     TRUE ~ PrettyName)) %>%
   
   # Apply the custom order for covariates
@@ -1120,11 +1001,11 @@ confint(top_model) %>%
     # plot as points
     geom_point(aes(y = estimate), size = 2.5) +
   
-          scale_y_continuous(limits = c(0.4, 1.8)) + 
+          scale_y_continuous(limits = c(0.4, 2)) + 
 
     # add labels
     labs(x = '',
-         y = 'Rate ratio (standardized)') +
+         y = 'Odds ratio (standardized)') +
   
       annotate("text",
            x = 0.5,        # Left edge of panel
@@ -1150,101 +1031,16 @@ confint(top_model) %>%
 
 rate_fig_top
   
-ggsave(rate_fig_top, file = "./figures/top_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
+ggsave(rate_fig_top, file = "./figures/top_model_prop_binomial_odds_ratio.png", width = 5, height = 3.5)
 ```
 
 
-## 7.3. Rate ratio plots for the second-place model
-
-```{r}
-# Custom order for the x-axis covariates
-custom_order <- c(
-  "Broadleaf",
-  "Mixedwood",
-  "Coniferous",
-  "Fire <15",
-  "Inactive Well Sites",
-  "Seismic Lines",
-  "Pipelines & \nTransmission Lines"
-  )
-
-rate_fig_second <-
-
-# Exact same code as before, not annotating because I'm lazy. 
-confint(m_seis_wells) %>%
-  
-  as_tibble(rownames = "term") %>%
-  
-  set_names(c('term', 'lower', 'upper', 'estimate')) %>%
-  
-  mutate(across(c('lower', 'upper', 'estimate'), exp)) %>%
-  
-  filter(term %nin% c('(Intercept)', 'Std.Dev.(Intercept)|array',  'Std.Dev.(Intercept)|site:array')) %>%
-  
-  left_join(covs_formatted, by = c("term" = "Covariate")) %>%
-  
-  mutate(PrettyName = case_when(
-    term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
-    term == "pipe_trans" ~ "Pipelines & \nTransmission Lines",
-    TRUE ~ PrettyName)) %>%
-  
-  mutate(PrettyName = factor(PrettyName, levels = custom_order)) %>%
-  
-  ggplot(., aes(x = PrettyName)) + 
-  
-    geom_hline(yintercept = 1, linetype='dashed', col = 'grey20') + 
-  
-    geom_errorbar(aes(x = PrettyName, ymin = lower, ymax = upper), width = 0.1) +  # Error bars
-    
-    # add labels
-    labs(x = '',
-         y = '') +
-    
-    # plot as bars
-    geom_point(aes(y = estimate), size = 2.5) +
-  
-    scale_y_continuous(limits = c(0.4, 1.8)) + 
-  
-      # set theme
-    theme_bw() + 
-  
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +   # Rotate x-axis labels by 45 degrees
-  
-    annotate("text",
-           x = 0.5,        # Left edge of panel
-           y = 1.8,         # Top edge of panel
-           label = " ΔAICc=2.59",
-           hjust = 0,                  # Left-aligned
-           vjust = 1,                  # Top-aligned
-           size = 5)                    # Adjust size as needed
- 
-
-  
-    #add_phylopic(
-    #  uuid = get_uuid(name = "Sciurus vulgaris"),
-    #  x = 6.6,
-    #  y = 1.6, 
-    #  height = 0.22
-    #  )
-
-odds_fig_second
-
-ggsave(odds_fig_second, file= "./figures/second_place_model_neg_binomial_rate_ratios.png", width = 5, height = 3.5)
-```
 
 
-## 7.4. Export the combined top and second-ranking model figures in one!
 
-```{r}
-ggpubr::ggarrange(rate_fig_top, rate_fig_second, 
-                  ncol = 2, 
-                  nrow = 1,
-                  align = "hv",
-                  labels = c("A", "B")  # Add plot labels
-                  )
 
-ggsave("./figures/rate_ratio_top_model_second_model.png", width = 7, height = 4.2, dpi = 700)
-```
+
+
 
 
 
@@ -1298,7 +1094,7 @@ f_decid <- ggeffects::ggpredict(top_model, terms = c("lc_broadleaf [all]")) %>%
     #  height = 0.11
     #  )
 
-ggsave(f_decid, file = "./figures/top_model_neg_binomial_broadleaf.png", dpi=400, width = 6, height = 4)
+ggsave(f_decid, file = "./figures/top_model_prop_binomial_broadleaf.png", dpi=400, width = 6, height = 4)
 ```
 
 ## 8.2. Conifer:
@@ -1352,7 +1148,7 @@ f_conifer <- ggeffects::ggpredict(top_model, terms = c("lc_coniferous [all]")) %
     #)
 
 # Save the figure
-ggsave(f_conifer, file = "./figures/top_model_neg_binomial_conifer.png", dpi = 400, width = 6, height = 4)
+ggsave(f_conifer, file = "./figures/top_model_prop_binomial_conifer.png", dpi = 400, width = 6, height = 4)
 ```
 
 ## 8.3. Mixedwood:
@@ -1405,7 +1201,7 @@ f_mixedwood <- ggeffects::ggpredict(top_model, terms = c("lc_mixedwood [all]")) 
     #)
 
 # Save to file
-ggsave(f_mixedwood, file = "./figures/top_model_neg_binomial_mixedwood.png", dpi = 400, width = 6, height = 4)
+ggsave(f_mixedwood, file = "./figures/top_model_prop_binomial_mixedwood.png", dpi = 400, width = 6, height = 4)
 ```
 
 ## 8.4. Recent fire
@@ -1458,7 +1254,7 @@ f_fire <- ggeffects::ggpredict(top_model, terms = c("fire_0_15 [all]")) %>%
     # )
 
 # Save the plot
-ggsave(f_fire, file = "./figures/top_model_neg_binomial_fire.png", dpi = 400, width = 6, height = 4)
+ggsave(f_fire, file = "./figures/top_model_prop_binomial_fire.png", dpi = 400, width = 6, height = 4)
 
 ```
 
@@ -1468,7 +1264,7 @@ ggsave(f_fire, file = "./figures/top_model_neg_binomial_fire.png", dpi = 400, wi
 # Get just the row that contains the mean and SD for backtransforming...
 # This time for cumulative site disturbance (cfi_site), using the config buffer (might need to change to comp buffer later)
 backtransform <- data_scaled_summary %>%
-  filter(buffer_dist == config_buffer,
+  filter(buffer_dist == best_scale,
          variable == "cfi_site")
 
 # Use ggeffects to predict across all observed values of cfi_site (scaled)
@@ -1488,18 +1284,18 @@ f_cfi <- ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.4, fill = 'goldenrod3') +
   
     # Add raw data rug for this buffer distance only
-    geom_rug(data = data %>% filter(buffer_dist == config_buffer),
+    geom_rug(data = data %>% filter(buffer_dist == best_scale),
              aes(x = cfi_site),
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Cumulative Anthro. \nFootprint [2250 m]", 
+    labs(x = "Cumulative \nDisturbance [2000 m]", 
          y = NULL) +
       
     # Remove padding on left of x-axis
-    scale_x_continuous(expand = c(0, 0), limits = c(0, 0.302)) +
+    scale_x_continuous(expand = c(0, 0), limits = c(0, 0.3128)) +
   
-    scale_y_continuous(limits = c(0, 1.8)) +
+    scale_y_continuous(limits = c(0, 0.7)) +
   
     # Minimalist, clean plot theme
     theme_bw() + 
@@ -1513,8 +1309,10 @@ f_cfi <- ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
     #   height = 1.2
     # )
 
+f_cfi 
+
 # Save the plot
-ggsave(f_cfi, file = "./figures/top_model_neg_binomial_cfi.png", dpi = 400, width = 6, height = 4)
+ggsave(f_cfi, file = "./figures/top_model_prop_binomial_cfi.png", dpi = 400, width = 6, height = 4)
 
 ```
 
@@ -1525,7 +1323,7 @@ ggsave(f_cfi, file = "./figures/top_model_neg_binomial_cfi.png", dpi = 400, widt
 # Get just the row that contains the mean and SD for backtransforming...
 # This time for cumulative site disturbance (cfi_site), using the config buffer (might need to change to comp buffer later)
 backtransform <- data_scaled_summary %>%
-  filter(buffer_dist == config_buffer,
+  filter(buffer_dist == best_scale,
          variable == "nonanthro_ed")
 
 # Use ggeffects to predict across all observed values of cfi_site (scaled)
@@ -1545,12 +1343,12 @@ f_edge <- ggeffects::ggpredict(top_model, terms = c("nonanthro_ed [all]")) %>%
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.48, fill = 'darkblue') +
   
     # Add raw data rug for this buffer distance only
-    geom_rug(data = data %>% filter(buffer_dist == config_buffer),
+    geom_rug(data = data %>% filter(buffer_dist == best_scale),
              aes(x = nonanthro_ed),
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Anthropogenic Edge \nDensity (m/Ha) [2250 m]", 
+    labs(x = "Anthropogenic Edge \nDensity (m/Ha) [2000 m]", 
          y = NULL) +
       
     # Remove padding on left of x-axis
@@ -1571,7 +1369,7 @@ f_edge <- ggeffects::ggpredict(top_model, terms = c("nonanthro_ed [all]")) %>%
     # )
 
 # Save the plot
-ggsave(f_edge, file = "./figures/top_model_neg_binomial_edge.png", dpi = 400, width = 6, height = 4)
+ggsave(f_edge, file = "./figures/top_model_prop_binomial_edge.png", dpi = 400, width = 6, height = 4)
 
 ```
 
@@ -1583,7 +1381,7 @@ ggsave(f_edge, file = "./figures/top_model_neg_binomial_edge.png", dpi = 400, wi
 # Get just the row that contains the mean and SD for backtransforming...
 # This time for non-anthropogenic edge density (nonanthro_ed), using config buffer
 backtransform <- data_scaled_summary %>%
-  filter(buffer_dist == config_buffer,
+  filter(buffer_dist == best_scale,
          variable == "nonanthro_ed")
 
 # Predict squirrel occurrence across full range of nonanthro_ed
@@ -1619,15 +1417,15 @@ f_edge_cfi <- ggeffects::ggpredict(
     scale_color_manual(
       values = c('grey20', 'grey20'),  # Lines stay neutral
       labels = c( # Hacky way to get the labels to the unscaled values
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.20), 3)),
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.89), 3))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.20), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.89), 3))
       )
     ) +
     scale_fill_manual(
       values = c('darkblue', 'darkred'),  # Fill colors for clarity
       labels = c(
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.20), 3)),
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$cfi_site, 0.89), 3))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.20), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.89), 3))
       )
     ) +
   
@@ -1645,7 +1443,7 @@ f_edge_cfi <- ggeffects::ggpredict(
   
     # Rug plot shows actual values of edge density in the unscaled data
     geom_rug(
-      data = data %>% filter(buffer_dist == config_buffer),
+      data = data %>% filter(buffer_dist == best_scale),
       aes(x = nonanthro_ed),
       alpha = 0.5,
       color = "grey20",
@@ -1654,15 +1452,15 @@ f_edge_cfi <- ggeffects::ggpredict(
   
     # Axes and legend
     labs(
-      x = "Anthropogenic Edge \nDensity (m/Ha) [2250 m]", 
-      y = "Expected count",
-      color = "Cumulative \nAnthropogenic \nFootprint", 
-      fill = "Cumulative \nAnthropogenic \nFootprint"
+      x = "Anthropogenic Edge \nDensity (m/Ha) [2000 m]", 
+      y = "Occurrence probability",
+      color = "Cumulative \nDisturbance", 
+      fill = "Cumulative \nDisturbance"
     ) +
   
     # Trim x and y axis range to what's observed and relevant
-    scale_x_continuous(limits = c(2, 202.85), expand = c(0, 0)) +
-    scale_y_continuous(limits = c(0, 1.1), expand = c(0, 0)) +
+    scale_x_continuous(limits = c(2, 202.81), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 0.6), expand = c(0, 0)) +
   
     # Clean, minimal theme
 theme_minimal() +
@@ -1673,9 +1471,9 @@ theme_minimal() +
     legend.box.margin = margin(0, 0, 0, -5),
     plot.margin = margin(5, 5, 5, 5),
     # Transparent background
-    panel.background = element_rect(fill = NA, color = NA),
-    plot.background = element_rect(fill = NA, color = NA),
-    legend.background = element_rect(fill = NA, color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    legend.background = element_rect(fill = "white", color = NA),
     panel.border = element_rect(color = "black", fill = NA , linewidth = 0.6)
   )
 
@@ -1688,7 +1486,7 @@ theme_minimal() +
     # )
 
 # Save it!
-ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction_transparent.png", dpi = 400, width = 7, height = 4)
+#ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction_transparent.png", dpi = 400, width = 7, height = 4)
 
 ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction.png", dpi = 400, width = 7, height = 4)
 ```
@@ -1700,7 +1498,7 @@ Do edges change the effect of site disturbance? This is a sort of backwards inte
 ```{r}
 # Backtransform helper: grab mean and SD for cumulative site disturbance (cfi_site)
 backtransform <- data_scaled_summary %>%
-  filter(buffer_dist == config_buffer,
+  filter(buffer_dist == best_scale,
          variable == "cfi_site")
 
 # Predict squirrel occurrence across full range of cfi_site,
@@ -1736,21 +1534,21 @@ f_cfi_edge <- ggeffects::ggpredict(
     scale_color_manual(
       values = c('grey20', 'grey20'), 
       labels = c( # Hacky way to get the labels to the unscaled values
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.20), 1)),
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.80), 1))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$nonanthro_ed, 0.20), 1)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$nonanthro_ed, 0.80), 1))
       )
     ) +
     scale_fill_manual(
       values = c('darkblue', 'goldenrod3'), 
       labels = c(
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.20), 1)),
-        paste0(round(quantile((data %>% filter(buffer_dist == config_buffer))$nonanthro_ed, 0.80), 1))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$nonanthro_ed, 0.20), 1)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$nonanthro_ed, 0.80), 1))
       )
     ) +
   
     # Rug for cfi values (unscaled) used in data
     geom_rug(
-      data = data %>% filter(buffer_dist == config_buffer),
+      data = data %>% filter(buffer_dist == best_scale),
       aes(x = cfi_site),
       color = "grey20",
       inherit.aes = FALSE
@@ -1758,8 +1556,8 @@ f_cfi_edge <- ggeffects::ggpredict(
   
     # Axis labels and legend tweaks
     labs(
-      x = "Cumulative site disturbance", 
-      y = "Expected Count",
+      x = "Cumulative disturbance", 
+      y = "Occurrence probability",
       color = "edge \ndensity \n(m/Ha)", 
       fill = "edge \ndensity \n(m/Ha)"
     ) +
@@ -1814,14 +1612,13 @@ ggsave(f_full, file = "./figures/top_model_all_effects.png", width = 6.5, height
 ```
 
 
-
-
-
-
-
 # 9. Make a pretty AIC table for the report
 
 ```{r}
+models_rank <- models_allscales %>%
+  filter(buffer_dist == 2000)
+
+
 models_rank_table <- models_rank %>%
   
   # Select the model name and all columns up to (but not including) the 'df' column
@@ -1838,7 +1635,7 @@ models_rank_table <- models_rank %>%
   
   # Manually overwrite PrettyName for specific interaction terms
   mutate(PrettyName = case_when(
-    predictor == "cfi_site:nonanthro_ed" ~ "Edge Density × CFI",
+    predictor == "cfi_site:nonanthro_ed" ~ "Edge Density × Cumulative Disturbance",
     TRUE ~ PrettyName)) %>%
   
   # Group by model to prepare for collapsing predictors into formula strings
@@ -1881,6 +1678,8 @@ writexl::write_xlsx(models_rank_table, "./tables/OSM_model_selection_summary.xls
 
 ```
 
+
+
 # 10. Make a pretty model summary table
 
 ## 10.1. for the top model
@@ -1903,7 +1702,7 @@ fixed_effects <- broom.mixed::tidy(top_model, effects = "fixed", conf.int = TRUE
   
   # Replace term names with pretty labels
   mutate(Covariate = case_when(
-    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",   # Human-readable label for interaction
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × Cumulative Disturbance",   # Human-readable label for interaction
     is.na(PrettyName) ~ "Intercept",                           # Replace NA PrettyName with "Intercept"
     TRUE ~ PrettyName)) %>%
   
@@ -1937,59 +1736,118 @@ writexl::write_xlsx(top_model_summary, "./tables/OSM_top_model_summary.xlsx")
 
 ```
 
-## 10.2. For the second place model
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# OLD CHUNKS:
+
+
+These are old scale analysis chunks that won't be used anymore. 
+
+## 2.2. Anthro variables:
 
 ```{r}
-# Exact same code as before so not gonna re-type the annotations... you get the deal. 
-fixed_effects <- broom.mixed::tidy(m_seis_wells, effects = "fixed", conf.int = TRUE) %>%
+comp_scale <- purrr::map(unique(data$buffer_dist), ~{
 
-  mutate(across(c(estimate, std.error, statistic, p.value, conf.low, conf.high), ~ round(.x, 3))) %>%
+  # Subset the data based on the current buffer distance
+  data_subset <- data_scaled %>%
   
-  select(-component) %>%
-  
-  rename_with(~ c("Type", "Term", "Estimate", "SE", "z", "p", "CI Low", "CI High")) %>%
-  
-  left_join(covs_formatted, by = c("Term" = "Covariate")) %>%
-  
-  mutate(Covariate = case_when(
-    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × CFI",
-    is.na(PrettyName) ~ "Intercept",
-    TRUE ~ PrettyName)) %>%
-  
-  select(-Term, -PrettyName)
+    filter(buffer_dist == .x)
 
-fixed_effects
+  # Fit the initial model for the current buffer distance
+  glmmTMB(cbind(n_present, n_absent) ~ 
 
-random_effects <- broom.mixed::tidy(top_model, effects = "ran_pars", conf.int = TRUE) %>%
+                        pipe_trans + 
+                        seismic + 
+                        wells_inactive + 
+                        #harvest_total +
+                        wells_active +
+                        osm_industrial +
+                        harvest_0_15 +
+                        #roads + 
+
+                        (1|array/site),
+
+                      data = data_subset, 
+                      family = binomial, 
+                      na.action = na.fail)
   
-    mutate(group = case_when(
-      group == "site:array" ~ "Site [nested]",
-      group == "array" ~ "Array",
-      TRUE ~ group),
-      
-    effect = "Random") %>%
+  }
+  ) %>%
   
-  select("Type" = "effect", "Covariate" = group, "SD (intercept)" = "estimate")
-
-# Add a title for each table and stack them
-top_model_summary <- bind_rows(
-  tibble(Table = "Fixed Effects", fixed_effects),
-  tibble(Table = "Random Effects", random_effects)
-)
-
-writexl::write_xlsx(top_model_summary, "./tables/OSM_second_place_model_summary.xlsx")
+  set_names(unique(data$buffer_dist)) %>%
+  
+  # Model selection and AIC for each scale
+  MuMIn::model.sel(comp_scale) %>%
+  
+  as.data.frame(.) %>%
+   
+  dplyr::mutate(buffer = as.numeric(rownames(.)),
+                submodel = "COMP")
 ```
 
 
+## 2.3. Configuration
 
+```{r}
+config_scale <- purrr::map(unique(data$buffer_dist), ~{
+  
+  # Subset the data based on the current buffer distance
+  data_subset <- data_scaled %>%
+    
+    filter(buffer_dist == .x)
+  
+  # Fit the initial model for the current buffer distance
+  glmmTMB(cbind(n_present, n_absent) ~ 
 
+                        # configuration variables
+                        landscape_shei +
+                        nonanthro_ed +
+                        landscape_mesh +
 
+                        (1|array/site),
+                      
+                      data = data_subset, 
+                      family = binomial, 
+                      na.action = na.fail)
+  
+  }
+  ) %>%
 
-
-
-
-
-
-
-
-
+  set_names(unique(data$buffer_dist)) %>% 
+  
+  # Model selection and AIC for each scale
+  MuMIn::model.sel(config_scale) %>%
+  
+  as.data.frame(.) %>%
+   
+  dplyr::mutate(buffer = as.numeric(rownames(.)),
+                submodel = "CONFIG")
+```
