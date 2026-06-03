@@ -446,7 +446,9 @@ model_formulae <- list(
                                 random_effects)),
   
   m_edgeXcfi = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +", 
-                                random_effects))
+                                random_effects)),
+
+m_edgeXcfi_nonat = as.formula(paste("cbind(n_present, n_absent) ~ nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +",   random_effects))
 )
 ```
 
@@ -525,6 +527,15 @@ models_allscales <- map_dfr(anthro_buffer, function(i){
 })
 ```
 
+```{r}
+# pull out the top model and the cfiXedge without natural covariates
+# check if the natural covariates are "washing out" the effects of edge 
+
+model_compare <- models_allscales %>%
+  filter(model %in% c("m_edgeXcfi", "m_edgeXcfi_nonat"))
+
+writexl::write_xlsx(model_compare, "./tables/edgeXcfi_natural.xlsx")
+```
 
 What's the scale of the top performing model?
 
