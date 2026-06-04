@@ -448,7 +448,8 @@ model_formulae <- list(
   m_edgeXcfi = as.formula(paste("cbind(n_present, n_absent) ~ fire_0_15 + lc_broadleaf + lc_coniferous + lc_mixedwood + nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +", 
                                 random_effects)),
 
-m_edgeXcfi_nonat = as.formula(paste("cbind(n_present, n_absent) ~ nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +",   random_effects))
+m_edgeXcfi_nonat = as.formula(paste("cbind(n_present, n_absent) ~ nonanthro_ed + cfi_site + nonanthro_ed*cfi_site +",   
+                                    random_effects))
 )
 ```
 
@@ -534,7 +535,7 @@ models_allscales <- map_dfr(anthro_buffer, function(i){
 model_compare <- models_allscales %>%
   filter(model %in% c("m_edgeXcfi", "m_edgeXcfi_nonat"))
 
-writexl::write_xlsx(model_compare, "./tables/edgeXcfi_natural.xlsx")
+writexl::write_xlsx(model_compare, "./tables/top_model_without_landcover_modelselectionsummary.xlsx")
 ```
 
 What's the scale of the top performing model?
@@ -568,15 +569,15 @@ fig_matrix_effects <- models_allscales %>%
   
   # Fix a couple manually
   mutate(PrettyName = case_when(
-    variable == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
-    variable == "cfi_site:nonanthro_ed" ~ "Edge Density × \nCumulative Disturbance",
+    variable == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Footprint",
+    variable == "cfi_site:nonanthro_ed" ~ "Edge Density × \nCumulative Footprint",
     TRUE ~ PrettyName)) %>%
   
   
   filter(PrettyName %in% c(
-  "Cumulative Disturbance",
+  "Cumulative Footprint",
   "Edge Density",
-  "Edge Density × \nCumulative Disturbance"
+  "Edge Density × \nCumulative Footprint"
   )) %>%
   
   # Generate the tile plot
@@ -749,6 +750,31 @@ top_model <- glmmTMB(cbind(n_present, n_absent) ~
                       na.action = na.fail)
 ```
 
+We can also store the no-landcover model here to satisfy some requests from the Reviewers. 
+
+```{r}
+top_model_no_landcover <- glmmTMB(cbind(n_present, n_absent) ~ 
+                        
+                        # natural covariates
+                        #fire_0_15 +
+                        #lc_broadleaf +
+                        #c_coniferous +
+                        #lc_mixedwood + 
+                      
+                        # configuration variables
+                        #landscape_shei +
+                        nonanthro_ed + 
+                        cfi_site +
+                        nonanthro_ed*cfi_site +
+                        #landscape_mesh +
+
+                        (1|array/site),
+
+                      data = data_final_scaled, 
+                      family = binomial, 
+                      na.action = na.fail)
+```
+
 We should have done this before model fitting, but at least now we can look at the correlations in our final model/scale to make sure everything is A-okay. 
 
 Let's look at the correlation among this final set of candidate variables at their respective spatial scales:
@@ -808,11 +834,6 @@ writexl::write_xlsx(xxx, "./tables/OSM_final_dataset_high_correlation.xlsx")
 ```
 
 
-```{r}
-
-```
-
-
 # 6. Model inspection and validation
 
 ## 6.0. A bit of set up for tables and figures
@@ -864,7 +885,7 @@ performance::check_collinearity(top_model) %>%
   
   # Manual fix for a couple of them
   mutate(PrettyName = case_when(
-    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Footprint",
     TRUE ~ PrettyName)) %>%
   
   # plot with ggplot
@@ -897,7 +918,7 @@ ggsave("./figures/top_model_proportional_binomial_VIF.png", dpi=500, width = 5, 
 ## 6.6. Likelihood ratio test for random effect structure:
 
 ```{r}
-m_edgeXcfi_noranef <- glmmTMB(cbind(n_present, n_absent) ~ 
+top_model_no_ranef <- glmmTMB(cbind(n_present, n_absent) ~ 
                         
                         # natural covariates
                         fire_0_15 +
@@ -909,43 +930,19 @@ m_edgeXcfi_noranef <- glmmTMB(cbind(n_present, n_absent) ~
                         #landscape_shei +
                         nonanthro_ed + 
                         cfi_site +
-                        nonanthro_ed*cfi_site +
+                        nonanthro_ed*cfi_site,# +
                         #landscape_mesh +
 
-                        (1|site),
+                        #(1|site),
 
                       data = data_final_scaled, 
                       family = binomial, 
                       na.action = na.fail)
 
 
-m_edgeXcfi_noranef2 <- glmmTMB(cbind(n_present, n_absent) ~ 
-                        
-                        # natural covariates
-                        fire_0_15 +
-                        lc_broadleaf +
-                        lc_coniferous +
-                        lc_mixedwood + 
-                      
-                        # configuration variables
-                        #landscape_shei +
-                        nonanthro_ed + 
-                        cfi_site +
-                        nonanthro_ed*cfi_site + 
-                        #landscape_mesh +
-                        
-                        (1|array/site),
+performance::check_overdispersion(top_model_no_ranef)
 
-                      data = data_final_scaled, 
-                      family = binomial, 
-                      na.action = na.fail)
-
-summary(m_edgeXcfi_noranef)
-summary(m_edgeXcfi_noranef2)
-
-performance::check_overdispersion(m_edgeXcfi_noranef)
-
-anova(m_edgeXcfi_noranef, m_edgeXcfi_noranef2)
+anova(top_model, top_model_no_ranef)
 ```
 
 
@@ -970,9 +967,9 @@ custom_order <- c(
   "Mixedwood",
   "Coniferous",
   "Fire <15",
-  "Cumulative Disturbance",
+  "Cumulative Footprint",
   "Edge Density",
-  "Edge Density × \nCumulative Disturbance"
+  "Edge Density × \nCumulative Footprint"
   )
 
 rate_fig_top <- 
@@ -995,7 +992,7 @@ confint(top_model) %>%
   
   # Fix a couple manually
   mutate(PrettyName = case_when(
-    term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Disturbance",
+    term == "nonanthro_ed:cfi_site" ~ "Edge Density × \nCumulative Footprint",
     TRUE ~ PrettyName)) %>%
   
   # Apply the custom order for covariates
@@ -1300,7 +1297,7 @@ f_cfi <- ggeffects::ggpredict(top_model, terms = c("cfi_site [all]")) %>%
              color = "grey20", inherit.aes = FALSE) +
   
     # Axis labels
-    labs(x = "Cumulative \nDisturbance [2000 m]", 
+    labs(x = "Cumulative \nFootprint [2000 m]", 
          y = NULL) +
       
     # Remove padding on left of x-axis
@@ -1465,8 +1462,8 @@ f_edge_cfi <- ggeffects::ggpredict(
     labs(
       x = "Anthropogenic Edge \nDensity (m/Ha) [2000 m]", 
       y = "Occurrence probability",
-      color = "Cumulative \nDisturbance", 
-      fill = "Cumulative \nDisturbance"
+      color = "Cumulative \nFootprint", 
+      fill = "Cumulative \nFootprint"
     ) +
   
     # Trim x and y axis range to what's observed and relevant
@@ -1567,7 +1564,7 @@ f_cfi_edge <- ggeffects::ggpredict(
   
     # Axis labels and legend tweaks
     labs(
-      x = "Cumulative disturbance", 
+      x = "Cumulative Footprint", 
       y = "Occurrence probability",
       color = "edge \ndensity \n(m/Ha)", 
       fill = "edge \ndensity \n(m/Ha)"
@@ -1646,7 +1643,7 @@ models_rank_table <- models_rank %>%
   
   # Manually overwrite PrettyName for specific interaction terms
   mutate(PrettyName = case_when(
-    predictor == "cfi_site:nonanthro_ed" ~ "Edge Density × Cumulative Disturbance",
+    predictor == "cfi_site:nonanthro_ed" ~ "Edge Density × Cumulative Footprint",
     TRUE ~ PrettyName)) %>%
   
   # Group by model to prepare for collapsing predictors into formula strings
@@ -1713,7 +1710,7 @@ fixed_effects <- broom.mixed::tidy(top_model, effects = "fixed", conf.int = TRUE
   
   # Replace term names with pretty labels
   mutate(Covariate = case_when(
-    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × Cumulative Disturbance",   # Human-readable label for interaction
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × Cumulative Footprint",   # Human-readable label for interaction
     is.na(PrettyName) ~ "Intercept",                           # Replace NA PrettyName with "Intercept"
     TRUE ~ PrettyName)) %>%
   
@@ -1748,6 +1745,61 @@ writexl::write_xlsx(top_model_summary, "./tables/OSM_top_model_summary.xlsx")
 ```
 
 
+
+## 10.2 And for the top model minus landcover: 
+
+
+```{r}
+# Extract fixed effects from the top model, including confidence intervals
+fixed_effects <- broom.mixed::tidy(top_model_no_landcover, effects = "fixed", conf.int = TRUE) %>%
+
+  # Round estimates, standard errors, test statistics, p-values, and confidence intervals to 3 decimal places
+  mutate(across(c(estimate, std.error, statistic, p.value, conf.low, conf.high), ~ round(.x, 3))) %>%
+  
+  # Remove the 'component' column, as it is not needed
+  select(-component) %>%
+  
+  # Rename columns for more understandable names
+  rename_with(~ c("Type", "Term", "Estimate", "SE", "z", "p", "CI Low", "CI High")) %>%
+  
+  # Join with formatted covariate names for prettier labels
+  left_join(covs_formatted, by = c("Term" = "Covariate")) %>%
+  
+  # Replace term names with pretty labels
+  mutate(Covariate = case_when(
+    Term == "nonanthro_ed:cfi_site" ~ "Edge Density × Cumulative Footprint",   # Human-readable label for interaction
+    is.na(PrettyName) ~ "Intercept",                           # Replace NA PrettyName with "Intercept"
+    TRUE ~ PrettyName)) %>%
+  
+  # Drop the 'Term' and 'PrettyName' columns after formatting
+  select(-Term, -PrettyName)
+
+# Extract random effects from the top model, including confidence intervals
+random_effects <- broom.mixed::tidy(top_model, effects = "ran_pars", conf.int = TRUE) %>%
+  
+  # Modify the group names for better readability
+  mutate(group = case_when(
+    group == "site:array" ~ "Site [nested]",  # Rename 'site:array' to 'Site [nested]'
+    group == "array" ~ "Array",               # Rename 'array' to 'Array'
+    TRUE ~ group),                            # Keep other group names unchanged
+  
+  # Add a new column 'effect' to indicate random effects
+  effect = "Random") %>%
+  
+  # Select relevant columns and rename them for clarity
+  select("Type" = "effect", "Covariate" = group, "SD (intercept)" = "estimate")
+
+# Combine both fixed and random effects into one summary table
+# Add a 'Table' column to distinguish between fixed and random effects
+top_model_summary <- bind_rows(
+  tibble(Table = "Fixed Effects", fixed_effects),
+  tibble(Table = "Random Effects", random_effects)
+)
+
+# Export the summary table to an Excel file
+writexl::write_xlsx(top_model_summary, "./tables/OSM_top_model_no_landcover_summary.xlsx")
+
+```
 
 
 
