@@ -105,18 +105,31 @@ response_prop <- response %>%
 Let's visualize the response variable for supporting information:
 
 ```{r}
+# REad in the landscape unit classifications. 
+lu_classification <- read_csv("./data/raw/landscape_unit_land_use_classifications.csv")
+
+
 response_prop %>%
   
   mutate(p_present = n_present/n_month) %>%
   
-ggplot(., aes(x = array, y = p_present)) + 
+    # Add in the classification column
+  left_join(lu_classification, by = "array") %>%
   
-  geom_jitter(width = 0.15, alpha = 1, size = 0.6, color = "black") + 
+  # Set the order for the legend in increasing disturbance
+  mutate(classification = factor(classification, 
+                                 levels = c("low development", "pre in situ", "in situ", "mine"))) %>%
+  
+ggplot(., aes(x = array, y = p_present, color = classification)) + 
+  
+  geom_jitter(width = 0.15, alpha = 1, size = 0.6) + 
+  
   
   #geom_boxplot() +
   
   labs(x = "array", 
-       y = "proportion of months present") + 
+       y = "proportion of months present",
+       color = "dominant land \nuse type") + 
   
   theme_bw() + 
   
@@ -136,7 +149,7 @@ ggplot(., aes(x = array, y = p_present)) +
 #    height = 0.2
 #   )
 
-ggsave(file = "./figures/allarrays_monthly_detections.png", width = 5, height = 3.2, dpi = 500)
+ggsave(file = "./figures/allarrays_monthly_detections.png", width = 6, height = 3.2, dpi = 500)
 
 # how many camera months and mean monthly detections?
 response_prop %>%
