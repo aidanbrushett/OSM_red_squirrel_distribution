@@ -1,7 +1,7 @@
 Covariate,PrettyName
-cfi_site,Cumulative Disturbance
-cfi_site_with_harvest,Cumulative Disturbance
-cfi_site_with_vegedges,Cumulative Disturbance
+cfi_site,Cumulative Footprint
+cfi_site_with_harvest,Cumulative Footprint
+cfi_site_with_vegedges,Cumulative Footprint
 fire_0_15,Fire <15
 harvest_0_15,Harvest <15
 harvest_total,Harvest
@@ -40,6 +40,6 @@ nonanthro_cohesion,Cohesion
 intercept,Intercept
 `(Intercept)`,Intercept
 ((Intercept)),Intercept
-nonanthro_ed:cfi_site,Edge Density x Cumulative Disturbance
+nonanthro_ed:cfi_site,Edge Density x Cumulative Footprint
 site:array,Site Random Intercept
 array,Array Random Intercept
