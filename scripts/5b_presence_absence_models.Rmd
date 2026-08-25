@@ -1413,8 +1413,8 @@ f_edge_cfi <- ggeffects::ggpredict(
   terms = c(
     "nonanthro_ed [all]",
     paste0("cfi_site [",
-           quantile(data_final_scaled$cfi_site, 0.89), ", ",
-           quantile(data_final_scaled$cfi_site, 0.20), "]")
+           quantile(data_final_scaled$cfi_site, 0.90), ", ",
+           quantile(data_final_scaled$cfi_site, 0.10), "]")
     )
   ) %>%
     
@@ -1438,15 +1438,15 @@ f_edge_cfi <- ggeffects::ggpredict(
     scale_color_manual(
       values = c('grey20', 'grey20'),  # Lines stay neutral
       labels = c( # Hacky way to get the labels to the unscaled values
-        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.20), 3)),
-        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.89), 3))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3))
       )
     ) +
     scale_fill_manual(
       values = c('darkblue', 'darkred'),  # Fill colors for clarity
       labels = c(
-        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.20), 3)),
-        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.89), 3))
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3))
       )
     ) +
   
@@ -1481,7 +1481,7 @@ f_edge_cfi <- ggeffects::ggpredict(
   
     # Trim x and y axis range to what's observed and relevant
     scale_x_continuous(limits = c(2, 202.81), expand = c(0, 0)) +
-    scale_y_continuous(limits = c(0, 0.6), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 0.54), expand = c(0, 0)) +
   
     # Clean, minimal theme
 theme_minimal() +
@@ -1926,4 +1926,133 @@ config_scale <- purrr::map(unique(data$buffer_dist), ~{
    
   dplyr::mutate(buffer = as.numeric(rownames(.)),
                 submodel = "CONFIG")
+```
+
+
+
+
+
+
+
+EDGE INTERACTION PLOT FOR THE GRAPHICAL ABSTRACT:
+
+```{r}
+# Get just the row that contains the mean and SD for backtransforming...
+# This time for non-anthropogenic edge density (nonanthro_ed), using config buffer
+backtransform <- data_scaled_summary %>%
+  filter(buffer_dist == best_scale,
+         variable == "nonanthro_ed")
+
+# Predict squirrel occurrence across full range of nonanthro_ed
+# for two quantiles (20th and 89th) of cumulative site disturbance (cfi_site)
+f_edge_cfi <- ggeffects::ggpredict(
+  
+  top_model, 
+  terms = c(
+    "nonanthro_ed [all]",
+    paste0("cfi_site [",
+           quantile(data_final_scaled$cfi_site, 0.90), ", ",
+           quantile(data_final_scaled$cfi_site, 0.10), "]")
+    )
+  ) %>%
+    
+  as.data.frame() %>%
+  
+  # Backtransform x values from scaled to original units (m/ha)
+  mutate(x = x * backtransform$sd + backtransform$mean) %>%
+
+  # Plot predictions and confidence ribbons, colored by cfi quantile group
+  ggplot(., aes(x = x, y = predicted, color = group)) +
+  
+    geom_line(size = 0.5) +  # Thin black line for predictions
+    
+    # Confidence interval ribbons, filled by group
+    geom_ribbon(
+      aes(ymin = conf.low, ymax = conf.high, fill = group),
+      alpha = 0.4, color = NA
+    ) +
+  
+    # Manually assign colors to line and fill for visual distinction
+    scale_color_manual(
+      values = c('grey20', 'grey20'),  # Lines stay neutral
+      labels = c( # Hacky way to get the labels to the unscaled values
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3))
+      )
+    ) +
+    scale_fill_manual(
+      values = c('darkblue', 'darkred'),  # Fill colors for clarity
+      labels = c(
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3))
+      )
+    ) +
+  
+  # OR JUST LABEL THEM AS QUANTILES 
+  
+      # Manually assign colors to line and fill for visual distinction
+    scale_color_manual(
+      values = c('grey20', 'grey20'),  # Lines stay neutral
+      labels = c(
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)*100, " %"),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3)*100, " %")
+      )
+    )+
+        
+    scale_fill_manual(
+      values = c('lightblue3', 'darkblue'),  # Fill colors for clarity
+      labels = c(
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.10), 3)*100, " %"),
+        paste0(round(quantile((data %>% filter(buffer_dist == best_scale))$cfi_site, 0.90), 3)*100, " %")
+      )
+    ) +
+  
+    # Rug plot shows actual values of edge density in the unscaled data
+    geom_rug(
+      data = data %>% filter(buffer_dist == best_scale),
+      aes(x = nonanthro_ed),
+      alpha = 0.5,
+      color = "grey20",
+      inherit.aes = FALSE
+    ) +
+  
+    # Axes and legend
+    labs(
+      x = "Anthropogenic Edge \nDensity (m/Ha) [2000 m]", 
+      y = "Red squirrel occurrence (95% CI)",
+      color = "Industrial Footprint", 
+      fill = "Industrial Footprint"
+    ) +
+  
+    # Trim x and y axis range to what's observed and relevant
+    scale_x_continuous(limits = c(2, 202.81), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 0.54), expand = c(0, 0)) +
+  
+    # Clean, minimal theme
+theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "top",
+    legend.margin = margin(0, 0, 0, 0),
+    legend.box.margin = margin(0, 0, 0, -5),
+    plot.margin = margin(5, 5, 5, 5),
+    # Transparent background
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    legend.background = element_rect(fill = "white", color = NA),
+    panel.border = element_rect(color = "black", fill = NA , linewidth = 0.6)
+  ) +
+
+    # Optional: add a squirrel icon again for flair :)
+     add_phylopic(
+       uuid = get_uuid(name = "Sciurus vulgaris"),
+       x = 180,
+       y = 0.46, 
+       height = 0.1
+     )
+
+f_edge_cfi
+
+#ggsave(f_edge_cfi, file = "./figures/top_model_edge_cfi_interaction_graphical_abstract.png", dpi = 500, width = 4, height = 3.3)
+
 ```
