@@ -1,0 +1,545 @@
+---
+title: "Format landscape covariates"
+author: "Aidan Brushett"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    highlight: tango
+    latex_engine: xelatex
+    includes:
+      in_header: preamble.tex
+    pandoc_args: [
+      "--variable=mainfont:Arial",      # Set Arial for main text
+      ]
+  html_document:
+    theme: default
+    highlight: tango
+    toc: yes
+    toc_float: yes
+---
+
+# Before you begin
+
+This script is number 2 of 6 in a series of scripts used to replicate the analyses presented in the paper: "Life on the edge: Industrial footprint and edge effects variably affect the distribution of a boreal small mammal"
+
+This script was used to append, combine, and rename the landscape metrics for all sites in the study that were extracted in the previous script. **The raw spatial data used to develop landcover metrics is not available on GitHub but can be shared by the authors upon request.**
+
+When running these scripts, please ensure that you have downloaded the [complete GitHub repository](www.github.com/aidanbrushett/OSM-red_squirrel-distribution). This will ensure you have all the files, data, and proper folder structure you will need to run this code and associated analyses.
+
+Also make sure you open RStudio through the R project (OSM_red_squirrel_distribution.Rproj). This will automatically set your working directory to the correct place (wherever you saved the repository) and ensure you don't have to change the file paths for some of the data. This analysis was initially run in R v4.3.0. If you have any questions or concerns, please contact one of the authors (in order):
+
+Aidan Brushett
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+Email: **[aidanbrushett@uvic.ca](aidanbrushett@uvic.ca)**
+
+Emerald Arthurs
+M.Sc. Student
+University of Victoria    
+School of Environmental Studies     
+
+---------
+
+# 0. Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(sf)
+library(tidyverse)
+rm(list=ls())
+```
+
+
+# 1. Import all covariate data
+
+```{r}
+hfi <- read_csv("./data/raw/OSM_HFI2021_metrics.csv")
+
+sbfi <- read_csv("./data/raw/OSM_SBFI2020_metrics.csv")
+
+config1 <- read_csv("./data/raw/OSM_simple_config_landscapemetrics.csv")
+
+config2 <- read_csv("./data/raw/OSM_grouped_config_landscapemetrics.csv")
+```
+
+# 2. Tidy up the HFI data
+
+## 2.1. Initial cleaning, add the sample year column
+
+```{r}
+hfi <- hfi %>%
+  
+  set_names(tolower(names(.)) %>%
+              str_replace_all(., pattern = c('-'), # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                              replacement = '_') %>%  # what you want the pattern to be replaced with
+              str_replace_all(., pattern = c('\\.'), # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                              replacement = '_')
+            ) %>%
+
+  # What year were the arrays sampled? Used to determine recent fire and burns.
+  # Currently, entered manually since this is the most flexible option.
+  mutate(
+    array_year = case_when(
+      array %in% c("LU2", "LU3") ~ 2021,
+      array %in% c("LU13", "LU15", "LU21", "LU1") ~ 2022,
+      array %in% c("LU9", "LU16", "LU14", "LU22") ~ 2023)
+  )
+  
+summary(hfi)
+```
+
+```{r}
+names(hfi)
+```
+
+## 1.2. Group the HFI data
+
+We will follow the convention used by Marissa Dyck, ABMI, etc. to group variables. This code is nice and robust to whether a column is present in the data or not. 
+
+```{r format covs}
+hfi_grouped <- hfi %>% 
+  
+  # rename 'vegetated_edge_roads' so that we can use 'road' as keyword to group roads without including this feature
+  rename(vegetated_edge_rds = vegetated_edge_roads) %>%
+  
+  mutate(
+    # borrowpits
+    borrowpits = rowSums(across(any_of(c(
+      grep("borrowpit", names(.), value = TRUE),
+      'dugout', 
+      'lagoon', 
+      'sump'
+    )))),
+    
+    # clearings
+    clearings = rowSums(across(any_of(c(
+      grep("clearing", names(.), value = TRUE),
+      'runway'
+    )))),
+    
+    # cultivations
+    cultivation = rowSums(across(any_of(c(
+      'crop', 
+      'cultivation_abandoned', 
+      'fruit_vegetables',
+      'rough_pasture', 
+      'tame_pasture'
+    )))),
+    
+    # industrial facilities
+    facilities = rowSums(across(any_of(c(
+      grep("facility", names(.), value = TRUE),
+      grep("plant", names(.), value = TRUE),
+      'camp_industrial', 
+      'urban_industrial',
+      'mill', 
+      'ris_camp_industrial', 
+      'ris_tank_farm', 
+      'ris_utilities'
+    )))),
+    
+    # harvest areas
+    harvest_total = rowSums(across(contains('harvest'))),
+    
+    # mine areas
+    mines = rowSums(across(any_of(c(
+      grep("mine", names(.), value = TRUE),
+      grep("tailing", names(.), value = TRUE),
+      'grvl_sand_pit', 
+      'peat', 
+      'ris_drainage', 
+      'ris_oilsands_rms',
+      'ris_overburden_dump', 
+      'ris_reclaim_ready', 
+      'ris_soil_salvaged', 
+      'ris_waste'
+    )))),
+    
+    # railways
+    railways = rowSums(across(any_of(grep("rlwy", names(.), value = TRUE)))),
+    
+    # reclaimed areas
+    reclaimed = rowSums(across(any_of(c(
+      grep("reclaimed", names(.), value = TRUE),
+      'ris_soil_replaced', 
+      'ris_windrow'
+    )))),
+    
+    # recreation areas
+    recreation = rowSums(across(any_of(c(
+      'campground', 
+      'golfcourse', 
+      'greenspace', 
+      'recreation'
+    )))),
+    
+    # residential areas
+    residential = rowSums(across(any_of(c(
+      'country_residence', 
+      'rural_residence', 
+      'urban_residence'
+    )))),
+    
+    # roads
+    roads = rowSums(across(any_of(c(
+      grep("road", names(.), value = TRUE),
+      'transfer_station', 
+      'interchange_ramp', 
+      'airp_runway', 
+      'ris_airp_runway'
+    )))),
+    
+    # seismic lines
+    seismic_lines = conventional_seismic,
+    
+    # 3D seismic lines
+    seismic_lines_3D = low_impact_seismic,
+    
+    # transmission lines
+    transmission_lines = rowSums(across(any_of(c(
+      grep("transmission", names(.), value = TRUE)
+    )))),
+    
+    # trails
+    trails = rowSums(across(any_of(c(
+      grep("trail", names(.), value = TRUE)
+    )))),
+    
+    # vegetated edges
+    veg_edges = rowSums(across(any_of(c(
+      grep("vegetated", names(.), value = TRUE),
+      'surrounding_veg'
+    )))),
+    
+    # man-made water features
+    water = rowSums(across(any_of(c(
+      'canal', 
+      'reservoir'
+    )))),
+    
+    # well sites
+    wells_total = rowSums(across(any_of(c(
+      grep("well", names(.), value = TRUE)
+    )))),
+    
+    # inactive well sites
+    wells_inactive = rowSums(across(any_of(c(
+      "well_aband"
+    )))),
+    
+    wells_active = rowSums(across(any_of(c(
+      'well_bitumen', 
+      'well_gas', 
+      'well_oil', 
+      'well_cased',
+      "well_cleared_not_confirmed", 
+      "well_cleared_not_drilled",
+      "well_cleared_drilled",
+      "well_drilled_other",
+      "ris_well",
+      "well_other", 
+      "well_unknown"
+    )))),
+    
+    # remove columns that were used to create new columns to tidy the data frame
+    .keep = 'unused'
+  ) %>%
+  
+  # reorder alphabetically except array, site and buff_dist
+  select(order(colnames(.))) %>% 
+  
+  # move the columns that aren't HFI features or landcover to the front
+  relocate(array, site, buffer_dist, array_year) %>% 
+  
+  # reorder variables so the veg data is after all the HFI data
+  relocate(starts_with('lc_class'), .after = wells_active)
+```
+
+## 1.3. Group the harvest data by year
+
+```{r}
+# Now compute row-wise harvest_0_15 and harvest_gt_15
+# Loop through the sample years. This is the most efficient code I could find. 
+hfi_harvest <- purrr::map_dfr(unique(hfi$array_year), ~{
+
+  # Columns to sum for each year
+  cols_0_15 <- paste0("harvest_area_", seq(.x - 14, .x))
+  cols_gt_15 <- paste0("harvest_area_", seq(1900, .x - 15))
+
+  hfi %>%
+    filter(array_year == .x) %>%
+    mutate(
+      
+      # Recent harvest
+      harvest_0_15 = rowSums(across(any_of(
+        cols_0_15
+      ))),
+      
+      # Old harvest
+      harvest_gt_15 = rowSums(across(any_of(
+        cols_gt_15
+      )))
+    ) %>%
+    
+  # move the columns that aren't HFI features or landcover to the front
+  select(array, site, buffer_dist, array_year, harvest_0_15, harvest_gt_15)
+  }
+  )
+```
+
+## 1.4. Add the harvest and do some additional grouping
+
+```{r}
+hfi_final <- hfi_grouped %>% 
+  
+  left_join(hfi_harvest, by = c("array", "site", "buffer_dist", "array_year")) %>%
+
+  mutate(
+    # create column osm_industrial following Marissa's convention
+    osm_industrial = 
+      borrowpits +
+      clearings +
+      facilities +
+      mines,
+    
+    # Lump popeline and transmission line
+    pipe_trans =
+      pipeline +
+      transmission_lines,
+    
+    # Lump seismic
+    seismic = 
+      seismic_lines + 
+      seismic_lines_3D,
+    
+    # Cumulative site disturbance without harvest
+    cfi_site =
+      osm_industrial +
+      wells_total + 
+      seismic + 
+      pipe_trans +
+      trails +
+      roads + 
+      railways,
+    
+    # Cumulative site disturbance with veg edges
+    cfi_site_with_vegedges = 
+      cfi_site + 
+      veg_edges,
+
+    # Cumulative site disturbance with harvest
+    cfi_site_with_harvest = 
+      cfi_site + 
+      harvest_0_15
+    
+    ) %>%
+  
+  # remove other features we don't need
+  select(!any_of(c(
+    'cfo',
+    'cultivation',
+    'reclaimed',
+    'recreation',
+    'residential',
+    'water',
+    'borrowpits',
+    'clearings',
+    'facilities',
+    'mines',
+    'pipeline',
+    'transmission_lines'
+  ))) %>%
+  
+  relocate(array, site, buffer_dist, array_year, sort(names(.)))
+
+names(hfi_final)
+```
+
+Looks good!!
+
+# 3. Tidy up the forest inventory data
+
+## 3.1. Clean up and add sample year column
+
+```{r}
+sbfi <- sbfi %>%
+  
+  set_names(tolower(names(.)) %>%
+              str_replace_all(., pattern = c('-'), # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                              replacement = '_') %>%  # what you want the pattern to be replaced with
+              str_replace_all(., pattern = c('\\.'), # provide the character pattern to look for (if you don't keep the \\ it won't work)
+                              replacement = '_')
+            ) %>%
+
+  mutate(
+    array_year = case_when(
+      array %in% c("LU2", "LU3") ~ 2021,
+      array %in% c("LU13", "LU15", "LU21", "LU1") ~ 2022,
+      array %in% c("LU9", "LU16", "LU14", "LU22") ~ 2023)
+  )
+  
+names(sbfi)
+```
+
+## 3.2. Calculate fire by year columns
+
+```{r}
+# Now compute row-wise fire_0_15 and fire_gt_15
+# Loop through the sample years. This is the most efficient code I could find. 
+sbfi_fire <- purrr::map_dfr(unique(sbfi$array_year), ~{
+  
+  # Columns to sum (based on fire year and sample year)
+  cols_0_15 <- paste0("fire_pct_", seq(.x - 14, .x))
+  cols_gt_15 <- paste0("fire_pct_", seq(1900, .x - 15))
+
+  sbfi %>%
+    filter(array_year == .x) %>%
+    mutate(
+      
+      # Sum them
+      fire_0_15 = rowSums(across(any_of(
+        cols_0_15
+      ))),
+      
+      fire_gt_15 = rowSums(across(any_of(
+        cols_gt_15
+      )))
+    ) %>%
+    
+  # move the columns that aren't HFI features or landcover to the front
+  select(array, site, buffer_dist, array_year, fire_0_15, fire_gt_15)
+  }
+  )
+```
+
+## 3.3. Finalize and give the species a more meaningful name
+
+```{r}
+sbfi_final <- sbfi %>% 
+  
+  # Some columns we don't want
+  select(-contains("fire"),
+         -contains("age"), 
+         -lc_rock_rubble,
+         -lc_snow_ice,
+         -lc_bryoids,
+         -lc_exposed_barren,
+         -contains("harvest")) %>%
+  
+  # Join the fire data
+  left_join(sbfi_fire, by = c("array", "site", "buffer_dist", "array_year")) %>%
+
+  relocate(array, site, buffer_dist, array_year, sort(names(.))) %>%
+  
+  # Nicer species column names
+  rename_with(
+    ~ paste0("pct_", str_remove(., "_pct_of_treed")),
+    .cols = contains("_pct_of_treed")
+  )
+
+names(sbfi_final)
+```
+
+# 4. Format the configuration data
+
+## 4.1. Merge data and select the metrics we want
+
+```{r}
+config_final <- config1 %>%
+  
+  left_join(config2, by = c("site", "buffer")) %>%
+  
+  # Classes for which we don't care about comp
+  select(-contains("water"),
+         -contains("anthropogenic")
+         ) %>%
+  
+  # Tidy up the column names
+  rename_with(
+    ~ paste0("nonanthro_", str_remove(., "natural_")),
+    .cols = contains("natural_")
+  ) %>%
+  
+  rename(buffer_dist = buffer) %>%
+  
+  # Fill in NA values with values that are "meaningful" for what we have. 
+  # Check the landscapemetrics documentation to see what an NA should be
+  # An NA cannot meaningfully be replaced for all metrics (e.g., 0/0)
+  mutate(
+    across(contains("_tca"), ~ ifelse(is.na(.), 0, .)),
+    across(contains("_ed"), ~ ifelse(is.na(.), 0, .)),
+    across(contains("_cohesion"), ~ ifelse(is.na(.), 100, .)),
+    across(contains("_np"), ~ ifelse(is.na(.), 1, .)),
+    across(contains("_cai_mn"), ~ ifelse(is.na(.), 0, .)),
+    across(contains("_siei"), ~ ifelse(is.na(.), 0.001, .)),
+    across(contains("_contag"), ~ ifelse(is.na(.), max(., na.rm=T), .))
+  )
+  
+summary(config_final)
+```
+
+# 5. Put it all together:
+
+## 5.1. Join the data
+```{r}
+covs <- hfi_final %>%
+  
+  left_join(sbfi_final, by = c("array", "site", "buffer_dist", "array_year")) %>%
+  
+  left_join(config_final, by = c("site", "buffer_dist"))
+```
+
+## 5.2. Append lat/long and UTM 12N coordinates
+
+```{r}
+coords <- read_csv("./data/raw/OSM_coordinates_2021_2022_2023.csv")
+
+# assuming lat/long was extracted in NAD83
+coords <- st_as_sf(coords, coords = c("long", "lat"), crs = 4269) %>% 
+  
+  select(array, site) %>%
+  
+  # Get lat and long in epsg:4269 in their own columns
+  mutate(long = st_coordinates(.)[,1],
+         lat = st_coordinates(.)[,2]) %>%
+  
+  # NAD1983 UTM 12N
+  st_transform(osm_coords, crs = 26912) %>%
+  
+  # Get UTM in columns
+  mutate(easting_12n = st_coordinates(.)[,1],
+         northing_12n = st_coordinates(.)[,2]) %>%
+  
+  st_drop_geometry(.) 
+``` 
+
+## 5.3. Final inspection
+
+```{r}
+# Tidy up and final check
+covs_final <- covs %>%
+  
+  left_join(coords, by = c('array', 'site')) %>%
+  
+  relocate(array, site, array_year, lat, long, easting_12n, northing_12n, buffer_dist)
+
+summary(covs_final)
+```
+
+## 5.4. Save the data:
+
+```{r}
+write_csv(covs_final, "./data/processed/OSM_all_covariates_HFI_SBFI_final.csv")
+```
+
+
+End script
+
+
+
+

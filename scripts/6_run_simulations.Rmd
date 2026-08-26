@@ -210,7 +210,7 @@ data_final_scaled <- bind_cols(
   
   relocate(contains("buffer"), .after=("n_absent"))
 
-  m_edgeXcfi <- glmmTMB(cbind(n_present, n_absent) ~ 
+  m_edgeXcfi <- glmmTMB(cbind(n_present,n_absent) ~ 
                         
                         # natural covariates
                         fire_0_15 +
@@ -227,7 +227,7 @@ data_final_scaled <- bind_cols(
 
                         (1|array/site),
 
-                      data = data_subset, 
+                      data = data_final_scaled, 
                       family = binomial, 
                       na.action = na.fail)
 
@@ -245,7 +245,7 @@ model = m_edgeXcfi
 original_data = data_final
 n_array = 10
 n_site_per_array = 43
-n_obs_per_site = 10
+n_obs_per_site = 11
 sampler_type = "normal"
 ```
 
@@ -361,20 +361,21 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
                ranef_array + 
                ranef_site,
              
-             mu = exp(eta),
+             # Apply logit link for binomial probability             
+             prob = plogis(eta),
              
-             squirrel = rnbinom(n = n(), mu = mu, size = sigma(model)))
+             # Generate binomial counts at the site level
+             n_present = rbinom(n = n(), size = n_obs_per_site, prob = prob),
+             n_absent = n_obs_per_site - n_present)
   
   sim_naive_occ <- data_sim %>%
-    group_by(site) %>%
-    summarize(dets = max(squirrel)) %>%
-    mutate(presence = ifelse(dets > 0, 1, 0)) %>%
-    summarize(sum(presence)) %>%
-    as.numeric()
+      mutate(presence = ifelse(n_present > 0, 1, 0)) %>%
+      summarize(occ = sum(presence)) %>%
+      as.numeric()
   
-  sim_indet <- sum(data_sim$squirrel)
+  sim_indet <- sum(data_sim$n_present)  
   
-  sim <- glmmTMB(squirrel ~ 
+  sim <- glmmTMB(cbind(n_present, n_absent) ~
                             
                             # natural covariates
                             fire_0_15 +
@@ -392,7 +393,7 @@ simulate_top_model <- function(model, original_data, n_array, n_site_per_array, 
                             (1|array/site),
     
                           data = data_sim, 
-                          family = nbinom2, 
+                          family = binomial, 
                           na.action = na.fail)
     
   
@@ -480,25 +481,25 @@ save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
 }
 
 # 1000 simulations with reduced sites per array
-for(i in 1:100) {
+#for(i in 1:100) {
 
-cat("\r\r Working on `reduced sites` batch", i)
+#cat("\r\r Working on `reduced sites` batch", i)
   
-load("./data/raw/simulation_checkpoint.RData")
+#load("./data/raw/simulation_checkpoint.RData")
 
-sim_results <- purrr::map_dfr(1:10, ~
-                 simulate_top_model(model = m_edgeXcfi, 
-                                    original_data = data_final, 
-                                    n_array = 10,
-                                    n_site_per_array = 22,
-                                    n_obs_per_site = 10,
-                                    sampler_type = "uniform"
-                                    )
-                 )
+#sim_results <- purrr::map_dfr(1:10, ~
+#                 simulate_top_model(model = m_edgeXcfi, 
+#                                    original_data = data_final, 
+#                                    n_array = 10,
+#                                    n_site_per_array = 22,
+#                                    n_obs_per_site = 10,
+#                                    sampler_type = "uniform"
+#                                    )
+#                )
 
-sim_master_results[[length(sim_master_results)+1]] <- sim_results
+#sim_master_results[[length(sim_master_results)+1]] <- sim_results
 
-save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
+#save(sim_master_results, file = "./data/raw/simulation_checkpoint.RData")
 }
 ```
 

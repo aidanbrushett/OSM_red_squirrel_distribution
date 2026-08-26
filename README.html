@@ -353,10 +353,13 @@ display: none;
 
 
 <div id="osm-red-squirrel-distribution" class="section level1">
-<h1>OSM Red Squirrel Distribution</h1>
-<p>Data and code for Brushett et al., 2025 - Life of the edge:
-industrial footprint and edge effects variably influence the spatial
-distribution of a boreal small mammal.</p>
+<h1>OSM Red squirrel distribution</h1>
+<p>Data and code for Brushett &amp; Arthurs et al., 2026 - Life of the
+edge: industrial footprint and edge effects variably influence the
+spatial distribution of a boreal small mammal. <strong>Please do not
+hesitate to reach out to any of the authors with questions about the
+manuscript, code, or materials supplied in this repository.</strong></p>
+<hr />
 <div id="general-information" class="section level3">
 <h3>GENERAL INFORMATION</h3>
 <p><strong>Title:</strong> Life of the edge: industrial footprint and
@@ -382,21 +385,17 @@ Email: emeraldarthurs@uvic.ca</p>
 <p><strong>Geographic location of data collection:</strong> Oil Sands
 Region, Alberta, Canada</p>
 <p><strong>Information about funding sources that supported the
-collection of the data:</strong> do we need this?</p>
+collection of the data:</strong> Funding was provided by the Oil Sands
+Monitoring (OSM) program, Natural Sciences and Engineering Research
+Council (NSERC), and University of Victoria’s Applied Conservation Macro
+Ecology (ACME) lab.</p>
+<hr />
 </div>
 <div id="sharingaccess-information" class="section level3">
 <h3>SHARING/ACCESS INFORMATION</h3>
 <p><strong>Licenses/restrictions placed on the data:</strong> None</p>
-<p><strong>Link to publications that cite:</strong></p>
-<p><strong>Recommended citation for this dataset:</strong> Brushett, A.,
-Arthurs, E., &amp; Fisher, J. (2025). Life of the edge: industrial
-footprint and edge effects variably influence the spatial distribution
-of a boreal small mammal [dataset]. <a href="https://github.com/aidanbrushett/OSM_red_squirrel_distribution" class="uri">https://github.com/aidanbrushett/OSM_red_squirrel_distribution</a></p>
-<p><strong>Recommended citation for this manuscript:</strong> Brushett,
-A., Arthurs, E., &amp; Fisher, J. (2025). Life of the edge: industrial
-footprint and edge effects variably influence the spatial distribution
-of a boreal small mammal. <em>Add journal information once
-published.</em></p>
+<p><strong>Link to publications that cite:</strong> None</p>
+<hr />
 </div>
 <div id="data-file-overview" class="section level3">
 <h3>DATA &amp; FILE OVERVIEW</h3>
@@ -404,7 +403,7 @@ published.</em></p>
 <p><u><em>Files in main folder:</em></u></p>
 <ul>
 <li><p><strong>OSM_red_squirrel_distribution.Rproj</strong>; R project
-to run code for Brushett et al., 2025</p></li>
+to run code the repository</p></li>
 <li><p><strong>README.html</strong>; a web browser version of this
 README file</p></li>
 <li><p><strong>README.md</strong>; a markdown version of this README
@@ -491,10 +490,10 @@ dataset prior to modelling.</p></li>
 <li><p><strong>4_Create_response_variables.Rmd;</strong> script to
 create and explore potential response variables describing the spatial
 distribution of red squirrels in the study area.</p></li>
-<li><p><strong>5_Fit_negative_binomial_models_best_scale.Rmd;</strong>
-script to fit, evaluate, and visualize all models of landscape structure
-and its influence on the spatial distribution of red squirrels in the
-study area.</p></li>
+<li><p><strong>5_Fit_proportional_binomial_models.Rmd;</strong> script
+to fit, evaluate, and visualize all models of landscape structure and
+its influence on the spatial distribution of red squirrels in the study
+area.</p></li>
 <li><p><strong>6_run_simulations.Rmd;</strong> script to fit models to
 simulated data and evaluate the predictive accuracy of the red squirrel
 models.</p></li>
@@ -503,35 +502,23 @@ models.</p></li>
 <p>This folder contains various plots generated in the scripts of this
 repository for the purposes of data visualization.</p>
 <ul>
-<li><p><strong>allarrays_monthly_detections.png;</strong> plot depicting
-the number of detections per month, grouped by landscape unit; generated
-in the 4_Create_response variable.rmd script</p></li>
-<li><p><strong>odds_ratio_top_model_second_model.png;</strong> plot
-depiciting the standardized odds ratios for each variable in top models;
-generated in the 5_Fit_negative_binomial_models_best_scale.rmd
-script</p></li>
-<li><p><strong>redsquirrel_neg_binomial_submodel_scale_modelweight.png;</strong>
-plot depicting the AICc weight of top models for each covariate subset
-across all buffer sizes; generated in the
+<li><p><strong>Figure 1.png;</strong> study area map and example photos
+of red squirrels</p></li>
+<li><p><strong>Figure 2.png;</strong> plot depicting the conditional
+effects of each variable in the top model; generated in the
 5_Fit_negative_binomial_models_best_scale.rmd script</p></li>
-<li><p><strong>top_model_all_effects.png;</strong> plot depicting the
-conditional effects of each variable in the top model; generated in the
-5_Fit_negative_binomial_models_best_scale.rmd script</p></li>
-<li><p><strong>top_model_diagnostics.png;</strong> plot depicting
-diagnostic plots for checking model assumptions; generated in the
-5_Fit_negative_binomial_models_best_scale.rmd script</p></li>
-<li><p><strong>top_model_simulations_coefficient_density_gaussian_sampler.png;</strong>
-plot depicting the results of the simulations using the Gaussian
-distribution sampler; generated in the 6_run_simulations.rmd
-script</p></li>
-<li><p><strong>top_model_simulations_coefficient_density_reduced_sample_size.png;</strong>
-plot depicting the results of the simulations using the uniform
-distribution sampler and a reduced sample size; generated in the
-6_run_simulations.rmd script</p></li>
-<li><p><strong>top_model_simulations_coefficient_density_uniform_sampler.png;</strong>
-plot depicting the results of the simulations using the uniform
-distribution sampler; generated in the 6_run_simulations.rmd
-script</p></li>
+<li><p><strong>Figure S1:</strong> plot depicting the proportion of
+months detected for each site, grouped by landscape unit; generated in
+the 4_Create_response variable.rmd script</p></li>
+<li><p><strong>Figure S2 scale sensitivity;</strong> estimated
+coefficients at all candidate spatial scales (buffer radii), identified
+using a sensitivity analysis with AICc-based scale
+optimization.</p></li>
+<li><p><strong>Figure S3 VIF:</strong> variance inflation factors (VIFs)
+for the top-performing model from model selection.</p></li>
+<li><p><strong>Figure S4 uniform sampler simulations.png;</strong> plot
+depicting the results of the simulations using the uniform distribution
+sampler; generated in the 6_run_simulations.rmd script</p></li>
 </ul>
 <p><u><em>Files in tables folder:</em></u></p>
 <p>This folder contains summary tables used for the production of the
@@ -541,28 +528,29 @@ final manuscript. They are not used as data sources.</p>
 relational table describing landscape covariates as named in the source
 data (<em>Covariate</em>) and their respective formatted names used for
 figures and tables in the manuscript (<em>PrettyName</em>).</p></li>
-<li><p><strong>OSM_all_covariates_summary_formatted.xlsx</strong>;
-summary table describing covariates (<em>Covariate)</em>, their final
-modeled spatial scale in candidate models, their median and 5%/95%
-quantiles, and their brief description (<em>Description)</em></p></li>
-<li><p><strong>OSM_final_dataset_high_correlation.xlsx;</strong> a
-pairwise table of Spearman’s r for variables with correlation &gt;0.6.
-Used to populate the Supporting Information document.</p></li>
-<li><p><strong>OSM_model_selection_summary_formatted.xlsx;</strong> a
-table of model selection results from the candidate model set. Models
-are ordered by their AICc rank. Includes main hypothesis corresponding
-to the model, model covariates, and model selection metrics (<em>degrees
-of freedom, AICc, delta AICc, and model weight</em>).</p></li>
-<li><p><strong>OSM_top_model_summary_formatted.xlsx;</strong> Beta
+<li><p><strong>Table 1 Covariate summary.xlsx</strong>; summary table
+describing covariates (<em>Covariate)</em>, their final modeled spatial
+scale in candidate models, their median and 5%/95% quantiles, and their
+brief description (<em>Description)</em></p></li>
+<li><p><strong>Table 2 Model selection.xlsx;</strong> a table of model
+selection results from the candidate model set. Models are ordered by
+their AICc rank. Includes main hypothesis corresponding to the model,
+model covariates, and model selection metrics (<em>degrees of freedom,
+AICc, delta AICc, and model weight</em>).</p></li>
+<li><p><strong>Table 3 Model coefficients.xlsx;</strong> Beta
 coefficient estimates, standard errors, and p values for metrics
 included in the top-ranked model from the model selection table.
 Standard deviation of the random intercept estimates are also
 included.</p></li>
-<li><p><strong>OSM_second_model_summary.xlsx;</strong> Beta coefficient
-estimates, standard errors, and p values for metrics included in the
-second-ranked model from the model selection table. Standard deviation
-of the random intercept estimates are also included.</p></li>
+<li><p><strong>Table S1 Correlations.xlsx;</strong> a pairwise table of
+Spearman’s r for variables with correlation &gt;0.5. Used to populate
+the Supporting Information document.</p></li>
+<li><p><strong>OSM_top_model_no_landcover_summary.xlsx;</strong> Beta
+coefficient estimates, standard errors, and p values for metrics
+included in the top-ranked model with landcover removed. Created during
+peer review for requested sensitivity analysis.</p></li>
 </ul>
+<hr />
 </div>
 <div id="methodological-information" class="section level3">
 <h3>METHODOLOGICAL INFORMATION</h3>
@@ -582,14 +570,14 @@ package glmmTMB.</p>
 link]</a>
 <a href="https://cran.r-project.org/bin/macosx/" target="_blank">[Mac
 link]</a></li>
-<li>Downlad R Studio
+<li>Download R Studio
 <a href="https://www.rstudio.com/products/rstudio/" target="_blank">[link]</a></li>
 </ul>
 <p><strong>People involved with sample collection, processing, analysis
 and/or submission:</strong></p>
 <p>Aidan Brushett and Emerald Arthurs conceived the study, designed the
 methodology, analyzed the data, and wrote the first draft of the
-manuscript; Aidan Brushett, Emerald Arthurs, and Jason Fisher collected
+manuscript; Emerald Arthurs, Aidan Brushett, and Jason Fisher collected
 the data; Jason Fisher oversaw the experimental design; All authors
 contributed meaningfully to the final draft of the manuscript and gave
 final approval for publication. Field data were collected by Millicent
@@ -597,6 +585,7 @@ Gaston, Rebecca Smith, Andrew Barnas, MacGregor Aubertin-Young, Laura
 Eliuk, Sandra Frey, Nicole Boucher, Shay Marks, Emerald Arthurs, Aidan
 Brushett, Madison Carlson, Megan Braun, Jamie Clarke, and Marissa
 Dyck.</p>
+<hr />
 </div>
 <div id="processed-data" class="section level2">
 <h2>PROCESSED DATA</h2>
@@ -612,6 +601,7 @@ those in <em>OSM_all_covariates_HFI_SBFI_final.csv</em> that were also
 considered in candidate models. All covariates are described
 below:</p></li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_all_covariates_hfi_sbfi_final.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -619,8 +609,6 @@ below:</p></li>
 <ul>
 <li><strong>Number of variables:</strong> 55</li>
 <li><strong>Number of cases/rows:</strong> 9461</li>
-<li><strong>NOTE:</strong> there is a sheet for each buffer size (22
-sheets representing 50 m to 5000 m)</li>
 </ul>
 <p><strong>Variable List:</strong></p>
 <ul>
@@ -795,6 +783,7 @@ Shannon evenness index within the buffer area. Described at: <a href="https://r-
 <li><strong>landscape_siei;</strong> a numeric variable indicating the
 Simpson evenness index within the buffer area. Described at: <a href="https://r-spatialecology.github.io/landscapemetrics/reference/lsm_l_shei.html">https://r-spatialecology.github.io/landscapemetrics/reference/lsm_l_siei.html</a></li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_monthly_detections_2021_2022_2023.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -802,8 +791,6 @@ Simpson evenness index within the buffer area. Described at: <a href="https://r-
 <ul>
 <li><strong>Number of variables:</strong> 7</li>
 <li><strong>Number of cases/rows:</strong> 63,935</li>
-<li><strong>NOTE:</strong> there is a sheet for each buffer size (22
-sheets)</li>
 </ul>
 <p><strong>Variable List:</strong></p>
 <ul>
@@ -822,6 +809,7 @@ absent (0) in that given month.</li>
 <li><strong>detections;</strong> number of independent detections of a
 species in a given month at a given camera site.</li>
 </ul>
+<hr />
 </div>
 </div>
 <div id="raw-data" class="section level2">
@@ -832,7 +820,7 @@ species in a given month at a given camera site.</li>
 <ul>
 <li><strong>Number of variables:</strong> 4</li>
 <li><strong>Number of cases/rows:</strong> 433</li>
-<li><strong>NOTE:</strong> Three sites had insufficient data to be
+<li><strong>NOTE:</strong> Some sites had insufficient data to be
 included in models, hence the discrepancy in the number of sites between
 this file and the <em>processed/</em> data files</li>
 </ul>
@@ -847,6 +835,7 @@ site.</li>
 <li><strong>long</strong>, site longitude in decimal degrees
 (WGS84)</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_grouped_config_landscapemetrics.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -854,10 +843,11 @@ site.</li>
 <ul>
 <li><strong>Number of variables:</strong> 8</li>
 <li><strong>Number of cases/rows:</strong> 9461</li>
-<li><strong>NOTE:</strong> An intermediate file wherein all variables
-used in final analysis are decribed under
+<li><strong>NOTE:</strong> An intermediate file. All variables carried
+forward for final analysis are described under
 “processed/OSM_all_covariates_HFI_SBFI_final.csv”</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_hfi2021_metrics.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR: [OSM_HFI2021_metrics.csv]</h3>
@@ -1339,6 +1329,7 @@ where at least one well is currently active. Specifically, a well site -
 confirmation of the boundary outline is provided by reference
 sources.</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_independent_detections_2021_2022_2023.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -1369,6 +1360,7 @@ captured</li>
 <li><strong>month;</strong> month in which the independent event was
 captured (1 to 12).</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_operating_2021_2022_2023.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -1388,6 +1380,7 @@ describes the camera site.</li>
 <li><strong>date;</strong> day that the camera was active (a new row for
 each day), format: YYYY-MM-DD</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_simple_config_landscapemetrics.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR:
@@ -1395,10 +1388,11 @@ each day), format: YYYY-MM-DD</li>
 <ul>
 <li><strong>Number of variables:</strong> 15</li>
 <li><strong>Number of cases/rows:</strong> 9461</li>
-<li><strong>NOTE:</strong> An intermediate file wherein all variables
-used in final analysis are decribed under
+<li><strong>NOTE:</strong> An intermediate file. All variables carried
+forward for the final analysis are described under
 “processed/OSM_all_covariates_HFI_SBFI_final.csv”</li>
 </ul>
+<hr />
 </div>
 <div id="data-specific-information-for-osm_timelapse_2021.csv-osm_timelapse_2022.csv-and-osm_timelapse_2023.csv" class="section level3">
 <h3>DATA-SPECIFIC INFORMATION FOR: [OSM_timelapse_2021.csv],
@@ -1507,6 +1501,82 @@ image on the Netdrive</li>
 <li><strong>day</strong>, numeric, day the image was taken</li>
 <li><strong>year</strong>, numeric, year the image was taken</li>
 </ul>
+<hr />
+</div>
+<div id="data-specific-information-for-osm_sbfi2020_metrics.csv" class="section level3">
+<h3>DATA-SPECIFIC INFORMATION FOR: [OSM_SBFI2020_metrics.csv]</h3>
+<ul>
+<li><strong>Number of variables:</strong> 111</li>
+<li><strong>Number of cases/rows:</strong> 9526</li>
+</ul>
+<p><strong>Variable List:</strong></p>
+<ul>
+<li><strong>array;</strong> a factor with 10 levels describing the
+landscape unit in which a camera was deployed</li>
+<li><strong>buffer;</strong> a numeric measurement in meters ranging
+from 50 - 5000, of the buffer radius around the camera for which the
+proportion of associated human factors variables were calculated.</li>
+<li><strong>site;</strong> a factor with 430 levels where the first
+element abbreviation describes the landscape unit and the second element
+describes the camera site.</li>
+<li><strong>buffer_dist;</strong> the radius of the circular buffer (in
+meters) around each camera site for which variables were extracted</li>
+<li><strong>AGE_[year1]_[year2]:</strong> proportion of the circular
+buffer area composed of forest within the given age class relative to
+the year 2020, which is sorted by decade. e.g. for forest 20-30 years
+old, the variable name is AGE_20_30.</li>
+<li><strong>LC_BROADLEAF;</strong> a numeric variable indicating the
+proportion of broadleaf forest within the buffer area.</li>
+<li><strong>LC_CONIFER;</strong> a numeric variable indicating the
+proportion of conifer forest within the buffer area.</li>
+<li><strong>LC_HERBS;</strong> a numeric variable indicating the
+proportion of herb within the buffer area.</li>
+<li><strong>LC_MIXEDWOOD;</strong> a numeric variable indicating the
+proportion of mixedwood forest within the buffer area.</li>
+<li><strong>LC_SHRUBS;</strong> a numeric variable indicating the
+proportion of shrubs within the buffer area.</li>
+<li><strong>LC_WATER;</strong> a numeric variable indicating the
+proportion of water within the buffer area.</li>
+<li><strong>LC_WETLAND;</strong> a numeric variable indicating the
+proportion of wetland within the buffer area.</li>
+<li><strong>LC_WETLAND_TREED;</strong> a numeric variable indicating the
+proportion of treed wetland within the buffer area.</li>
+<li><strong>LC_SNOW_ICE;</strong> a numeric variable indicating the
+proportion of permanent snow/ice within the buffer area.</li>
+<li><strong>LC_ROCK_RUBBLE;</strong> a numeric variable indicating the
+proportion of rock/rubble landcover within the buffer area.</li>
+<li><strong>LC_EXPOSED_BARREN;</strong> a numeric variable indicating
+the proportion of exposed, non-vegetated land cover within the buffer
+area.</li>
+<li><strong>LC_BRYOIDS;</strong> a numeric variable indicating the
+proportion of land covered by bryoids within the buffer area.</li>
+<li><strong>LARI.LAR_PCT_OF_TREED;</strong> a numeric variable
+indicating the proportion of Larix laricina (Tamarack) within the buffer
+area.</li>
+<li><strong>PICE.GLA_PCT_OF_TREED;</strong> a numeric variable
+indicating the proportion of Larix laricina (White spruce) within the
+buffer area.</li>
+<li><strong>PICE.MAR_PCT_OF_TREED;</strong> a numeric variable
+indicating the proportion of Picea mariana (Black spruce) within the
+buffer area.</li>
+<li><strong>PINU.BAN_PCT_OF_TREED;</strong> a numeric variable
+indicating the proportion of Pinus banksaina (Jack pine) within the
+buffer area.</li>
+<li><strong>POPU.TRE_PCT_OF_TREED;</strong> a numeric variable
+indicating the proportion of Populus tremuloides (Trembling aspen)
+within the buffer area</li>
+<li><strong>FIRE_PCT_[year];</strong> a numeric variable indicating the
+proportion of the buffer area that was burned in a given year. For
+instance, area burned in 2012 would be represented as
+<em>FIRE_PCT_2012.</em></li>
+<li><strong>HARVEST_PCT_[year];</strong> a numeric variable indicating
+the proportion of the buffer area that was harvested in a given year.
+For instance, area burned in 2012 would be represented as
+<em>HARVEST_PCT_2012. <strong>*Note that timber harvest values used in
+the analysis are from the ABMI 2021 HFI, not from this 2020
+SBFI.</strong></em></li>
+</ul>
+<hr />
 </div>
 </div>
 </div>
